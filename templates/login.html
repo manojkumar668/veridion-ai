@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veridion AI Login</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+
+/* ================= BASE ================= */
+body {
+    margin: 0;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: Inter, sans-serif;
+    background: #f7f8fc;
+    overflow: hidden;
+}
+
+/* Glow Background */
+body::before {
+    content: "";
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    background: radial-gradient(circle, rgba(79,70,229,0.15), transparent 70%);
+    top: -150px;
+    left: -150px;
+    filter: blur(60px);
+    z-index: 0;
+}
+
+/* ================= CARD ================= */
+.card {
+    width: 360px;
+    padding: 30px;
+    background: white;
+    border-radius: 18px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+    animation: pop 0.5s ease;
+    z-index: 1;
+    position: relative;
+}
+
+@keyframes pop {
+    from { transform: scale(0.9); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+}
+
+/* ================= LOGO ================= */
+.logo {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+}
+
+.logo svg {
+    width: 55px;
+    height: 55px;
+    animation: rotateLogo 8s linear infinite;
+    filter: drop-shadow(0 0 8px rgba(0,0,0,0.2));
+}
+
+@keyframes rotateLogo {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* ================= TITLE ================= */
+h2 {
+    text-align: center;
+    margin-bottom: 20px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    color: #000;
+
+    /* subtle glow */
+    text-shadow: 0 0 6px rgba(0,0,0,0.15);
+}
+
+/* ================= INPUTS ================= */
+input {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    outline: none;
+    transition: 0.3s;
+    font-size: 14px;
+}
+
+input:focus {
+    border-color: #4f46e5;
+    box-shadow: 0 0 10px rgba(79,70,229,0.2);
+}
+
+/* ================= BUTTON ================= */
+button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(90deg,#4f46e5,#6366f1);
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(79,70,229,0.2);
+}
+
+button:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+}
+
+/* ================= LOADER ================= */
+.loader {
+    display: none;
+    margin: 12px auto;
+    width: 20px;
+    height: 20px;
+    border: 3px solid #eee;
+    border-top: 3px solid #4f46e5;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    100% { transform: rotate(360deg); }
+}
+
+/* ================= TEXT ================= */
+.small {
+    text-align: center;
+    font-size: 12px;
+    margin-top: 10px;
+    color: #777;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <!-- AI STYLE LOGO -->
+    <div class="logo">
+        <svg viewBox="0 0 100 100">
+            <g fill="none" stroke="#4f46e5" stroke-width="4">
+                <path d="M50 10 L80 30 L80 70 L50 90 L20 70 L20 30 Z"/>
+                <path d="M50 10 L50 90"/>
+                <path d="M20 30 L80 70"/>
+                <path d="M80 30 L20 70"/>
+            </g>
+        </svg>
+    </div>
+
+    <h2>Veridion AI</h2>
+
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+
+    <button id="btn" onclick="login()">Login</button>
+
+    <div class="loader" id="loader"></div>
+
+    <div class="small">Secure AI System</div>
+
+</div>
+
+<script>
+
+function login(){
+
+    const email = document.getElementById("email").value.trim();
+    const password = document.getElementById("password").value.trim();
+    const btn = document.getElementById("btn");
+    const loader = document.getElementById("loader");
+
+    if(!email || !password){
+        alert("Please fill all fields");
+        return;
+    }
+
+    if(!email.includes("@")){
+        alert("Enter valid email");
+        return;
+    }
+
+    loader.style.display = "block";
+    btn.innerText = "Sending OTP...";
+    btn.disabled = true;
+
+    fetch("/login", {
+        method: "POST",
+        headers: {"Content-Type":"application/json"},
+        body: JSON.stringify({email, password})
+    })
+    .then(res => res.json())
+    .then(data => {
+
+        setTimeout(() => {
+
+            if(data.status === "otp_sent"){
+                window.location.href = data.redirect;
+            } else {
+                alert("Login failed");
+                resetUI();
+            }
+
+        }, 700);
+
+    })
+    .catch(() => {
+        alert("Server error");
+        resetUI();
+    });
+
+    function resetUI(){
+        loader.style.display = "none";
+        btn.innerText = "Login";
+        btn.disabled = false;
+    }
+}
+
+/* ENTER KEY */
+document.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){
+        login();
+    }
+});
+
+</script>
+
+</body>
+</html>

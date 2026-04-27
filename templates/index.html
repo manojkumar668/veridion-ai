@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veridion AI</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+
+/* RESET */
+*{margin:0;padding:0;box-sizing:border-box;font-family:Inter}
+
+/* BODY */
+body{
+    display:flex;height:100vh;
+    background:#0f1115;color:#fff;
+    transition:0.4s ease;
+}
+body.light{background:#fff;color:#111}
+
+/* SIDEBAR */
+.sidebar{width:220px;background:#151821;padding:10px;transition:.3s}
+body.light .sidebar{background:#f4f4f4}
+.sidebar.hidden{width:0;overflow:hidden}
+
+/* HISTORY */
+.history-item{
+    padding:8px;border-radius:8px;font-size:12px;
+    cursor:pointer;margin-bottom:5px;
+    transition:.2s;
+}
+.history-item:hover{
+    background:rgba(255,255,255,0.1);
+    transform:scale(1.05);
+}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column}
+
+/* HEADER */
+.header{
+    position:relative;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:10px 16px;
+    border-bottom:1px solid rgba(255,255,255,0.05)
+}
+
+/* CENTER TITLE */
+.title{
+    position:absolute;
+    left:50%;
+    transform:translateX(-50%);
+    font-size:22px;
+    font-weight:600;
+    letter-spacing:1px;
+
+    color:#6366f1; /* fallback */
+    background:linear-gradient(90deg,#6366f1,#8b5cf6,#22c55e);
+    background-clip:text;              /* ✅ FIXED */
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+
+    text-shadow:0 0 10px rgba(99,102,241,0.6);
+
+    animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse{
+    0%{transform:translateX(-50%) scale(1);}
+    50%{transform:translateX(-50%) scale(1.05);}
+    100%{transform:translateX(-50%) scale(1);}
+}
+
+/* BUTTON */
+.header-btn{
+    padding:6px 10px;border-radius:8px;cursor:pointer;
+    background:#222;color:#fff;transition:.2s
+}
+.header-btn:hover{transform:scale(1.1)}
+body.light .header-btn{background:#e5e7eb;color:#000}
+
+/* CHAT */
+.chat{
+    flex:1;padding:10px;overflow-y:auto;
+    display:flex;flex-direction:column;
+}
+
+/* MESSAGE */
+.msg{
+    max-width:65%;padding:8px 10px;border-radius:10px;
+    margin-bottom:6px;font-size:13px;
+    animation: fadeIn .3s ease;
+}
+@keyframes fadeIn{
+    from{opacity:0;transform:translateY(10px)}
+    to{opacity:1;transform:translateY(0)}
+}
+
+.user{align-self:flex-end;background:#2b2f3a}
+body.light .user{background:#e5e7eb}
+.bot{align-self:flex-start;background:#1a1d26}
+body.light .bot{background:#f1f1f1}
+
+/* RESULT */
+.result-card{
+    padding:10px;border-radius:12px;border:1px solid #444;
+    margin-bottom:8px;transition:.3s;
+}
+.result-card:hover{
+    transform:scale(1.02);
+    box-shadow:0 0 10px rgba(99,102,241,0.4);
+}
+
+/* INPUT */
+.input-area{
+    display:flex;align-items:center;
+    padding:10px;gap:8px;background:#151821
+}
+body.light .input-area{background:#fff}
+
+.input-box{
+    flex:1;background:#1f222b;border-radius:25px;padding:8px 12px
+}
+body.light .input-box{background:#f1f1f1}
+
+.input-box input{
+    width:100%;border:none;outline:none;background:transparent;color:inherit
+}
+
+/* BUTTONS */
+.send,.mic,.plus{
+    width:36px;height:36px;border-radius:50%;
+    display:flex;justify-content:center;align-items:center;
+    background:#222;color:white;cursor:pointer;
+    transition:.2s;
+}
+.send:hover,.mic:hover,.plus:hover{transform:scale(1.2)}
+
+/* BRAIN */
+.brain img{
+    width:42px;height:42px;
+    animation: floatBrain 3s ease-in-out infinite;
+}
+@keyframes floatBrain{
+0%{transform:translateY(0)}
+50%{transform:translateY(-6px)}
+100%{transform:translateY(0)}
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="sidebar" id="sidebar">
+    <div class="history-item">History</div>
+    <div id="historyList"></div>
+</div>
+
+<div class="main">
+
+<div class="header">
+
+<div style="display:flex;gap:10px;align-items:center;">
+    <div class="header-btn" onclick="toggleSidebar()">☰</div>
+    <div class="brain">
+        <img src="https://cdn-icons-png.flaticon.com/512/4712/4712109.png"/>
+    </div>
+</div>
+
+<div class="title">Veridion AI</div>
+
+<div style="display:flex;gap:10px;">
+    <div class="header-btn" onclick="toggleTheme()">🌓</div>
+    <div class="header-btn" onclick="logout()">Logout</div>
+</div>
+
+</div>
+
+<div class="chat" id="chatBox"></div>
+
+<div class="input-area">
+<div class="plus" onclick="openUpload()">+</div>
+
+<div class="input-box">
+<input id="input" placeholder="Ask Veridion AI..." />
+</div>
+
+<div class="mic" id="micBtn" onclick="startVoice()">🎤</div>
+<div class="send" onclick="send()">➤</div>
+
+<input type="file" id="fileInput" style="display:none" />
+</div>
+
+</div>
+
+<script>
+
+/* DOM */
+const chatBox = document.getElementById("chatBox");
+const input = document.getElementById("input");
+const historyList = document.getElementById("historyList");
+const sidebar = document.getElementById("sidebar");
+const fileInput = document.getElementById("fileInput");
+
+let historyData = [];
+
+/* MESSAGE */
+function addMsg(text,type){
+let div=document.createElement("div");
+div.className="msg "+type;
+div.innerText=text;
+chatBox.appendChild(div);
+chatBox.scrollTop = chatBox.scrollHeight;
+return div;
+}
+
+/* REASON */
+function getReason(text){
+text=text.toLowerCase();
+if(text.includes("urgent")) return "Urgency manipulation";
+if(text.includes("click")) return "Suspicious link detected";
+if(text.includes("free")) return "Too good to be true";
+return "Pattern detected";
+}
+
+/* RESULT */
+function createResultCard(data,text){
+let reason = data.prediction.includes("FAKE") ? getReason(text) : "Safe content";
+
+let card=document.createElement("div");
+card.className="result-card";
+
+card.innerHTML=`
+<b>${data.prediction}</b> (${data.confidence}%)
+<br><br>
+Reason: ${reason}
+`;
+
+chatBox.appendChild(card);
+chatBox.scrollTop = chatBox.scrollHeight;
+
+/* HISTORY */
+let item = {q:text, res:card.innerHTML};
+historyData.push(item);
+
+let h=document.createElement("div");
+h.className="history-item";
+h.innerText=text.substring(0,25)+"...";
+
+h.onclick = ()=>{
+chatBox.innerHTML="";
+addMsg(item.q,"user");
+
+let div=document.createElement("div");
+div.className="result-card";
+div.innerHTML=item.res;
+chatBox.appendChild(div);
+};
+
+historyList.appendChild(h);
+}
+
+/* THINKING */
+async function fakeThinking(bot){
+let steps = ["Analyzing...","Detecting patterns...","Checking credibility..."];
+for(let s of steps){
+bot.innerText = s;
+await new Promise(r=>setTimeout(r,600));
+}
+}
+
+/* SEND */
+async function send(){
+let text=input.value.trim();
+if(!text) return;
+
+addMsg(text,"user");
+input.value="";
+
+let bot=addMsg("","bot");
+
+await fakeThinking(bot);
+
+try{
+let res=await fetch("/predict",{
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify({text})
+});
+
+let data=await res.json();
+
+bot.remove();
+createResultCard(data,text);
+
+}catch{
+bot.innerText="Server error";
+}
+}
+
+/* ENTER */
+input.addEventListener("keydown", e=>{
+if(e.key==="Enter") send();
+});
+
+/* THEME */
+function toggleTheme(){
+document.body.classList.toggle("light");
+localStorage.setItem("theme", document.body.classList.contains("light") ? "light":"dark");
+}
+
+window.onload = ()=>{
+if(localStorage.getItem("theme")==="light"){
+document.body.classList.add("light");
+}
+};
+
+/* SIDEBAR */
+function toggleSidebar(){
+sidebar.classList.toggle("hidden");
+}
+
+/* UPLOAD */
+function openUpload(){
+let choice = prompt("1=File\n2=Link");
+if(choice=="1") fileInput.click();
+else if(choice=="2"){
+let link = prompt("Paste link:");
+if(link) input.value=link;
+}
+}
+
+/* VOICE */
+function startVoice(){
+if(!('webkitSpeechRecognition' in window)){
+alert("Voice not supported");
+return;
+}
+
+let mic=document.getElementById("micBtn");
+mic.classList.add("recording");
+
+let rec=new webkitSpeechRecognition();
+rec.start();
+
+rec.onresult=(e)=>{
+input.value=e.results[0][0].transcript;
+mic.classList.remove("recording");
+};
+
+rec.onerror=()=>{
+mic.classList.remove("recording");
+};
+}
+
+/* LOGOUT */
+function logout(){
+window.location.href="/logout";
+}
+
+</script>
+
+</body>
+</html>
