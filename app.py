@@ -24,6 +24,11 @@ vectorizer = None
 # ================= OTP STORAGE =================
 otp_store = {}
 
+# ================= HOME (HEALTH CHECK FOR RENDER) =================
+@app.route("/", methods=["GET"])
+def home():
+    return "Flask ML Backend Running 🚀"
+
 # ================= LOGIN PAGE =================
 @app.route('/')
 def login():
@@ -94,11 +99,12 @@ def predict():
     global model, vectorizer
 
     try:
+        # load model once
         if model is None or vectorizer is None:
-            print("⚡ Loading ML model now...")
+            print("⚡ Loading ML model...")
             model = joblib.load(MODEL_PATH)
             vectorizer = joblib.load(VECTORIZER_PATH)
-            print("✅ Model Loaded Successfully")
+            print("✅ Model Loaded")
 
         data = request.get_json()
 
@@ -138,22 +144,12 @@ def logout():
     session.clear()
     return redirect(url_for("login"))
 
-# ================= START SERVER =================
+# ================= START SERVER (RENDER FIX) =================
 if __name__ == "__main__":
-    print("📡 Flask about to start server...")
-    print("🔥 STARTING FLASK CLEAN MODE")
+    print("🚀 Starting Flask Server...")
 
-    # 🔥 PRINT ALL ROUTES (DEBUG)
-    print("📡 ALL ROUTES:")
-    for rule in app.url_map.iter_rules():
-        print(rule)
-
-    try:
-        app.run(
-            host="127.0.0.1",
-            port=5001,
-            debug=False,
-            use_reloader=False
-        )
-    except Exception as e:
-        print("❌ FLASK CRASH:", e)
+    app.run(
+        host="0.0.0.0",   # ✅ IMPORTANT FOR DEPLOYMENT
+        port=int(os.environ.get("PORT", 5001)),
+        debug=False
+    )
