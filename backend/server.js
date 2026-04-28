@@ -14,8 +14,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// ================= DB CONNECT (NON-BLOCKING) =================
+connectDB()
+  .then(() => console.log("✅ MongoDB Connected Successfully"))
+  .catch((err) => console.log("❌ MongoDB ERROR:", err.message));
+
 // ================= DEBUG =================
-console.log("MONGO URI:", process.env.MONGO_URI);
+console.log("MONGO URI LOADED");
 
 // ================= ROUTES =================
 app.get("/", (req, res) => {
@@ -33,44 +38,52 @@ app.post("/predict", async (req, res) => {
 
         console.log("📥 Incoming text:", text);
 
-        // 🔥 Call Flask ML API
-        const response = await axios.post("http://127.0.0.1:5001/predict", {
-            text
-        });
+        // ⚠️ SAFE FLASK HANDLING
+        const FLASK_API = process.env.FLASK_API_URL;
 
-        const result = response.data;
+        let result;
+
+        if (FLASK_API) {
+            const response = await axios.post(FLASK_API, { text });
+            result = response.data;
+        } else {
+            result = {
+                prediction: "FLASK NOT CONNECTED",
+                confidence: 0
+            };
+        }
 
         console.log("🤖 ML Response:", result);
 
-        // 🔥 SAVE TO MONGODB
-        console.log("🔥 Saving to DB...");
-
-        const saved = await Prediction.create({
-            text: text,
-            prediction: result.prediction,
-            confidence: result.confidence
-        });
-
-        console.log("✅ Saved Document:", saved);
+        // 🔥 SAVE TO MONGODB (safe)
+        try {
+            await Prediction.create({
+                text: text,
+                prediction: result.prediction,
+                confidence: result.confidence
+            });
+        } catch (dbErr) {
+            console.log("⚠️ DB Save Error:", dbErr.message);
+        }
 
         return res.json(result);
 
     } catch (error) {
         console.log("❌ Predict Error:", error.message);
         return res.status(500).json({
-            error: "ML service error",
+            error: "Service error",
             details: error.message
         });
     }
 });
 
-// ================= HISTORY ROUTE =================
+// ================= HISTORY =================
 app.get("/history", async (req, res) => {
     try {
         const data = await Prediction.find()
             .sort({ createdAt: -1 })
-            .limit(10)        // 🔥 last 10 records
-            .select("-__v");  // 🔥 remove __v
+            .limit(10)
+            .select("-__v");
 
         res.json(data);
     } catch (err) {
@@ -78,7 +91,7 @@ app.get("/history", async (req, res) => {
     }
 });
 
-// ================= STATS ROUTE =================
+// ================= STATS =================
 app.get("/stats", async (req, res) => {
     try {
         const total = await Prediction.countDocuments();
@@ -96,34 +109,9 @@ app.get("/stats", async (req, res) => {
     }
 });
 
-// ================= START SERVER =================
+// ================= START SERVER (FIXED FOR RENDER) =================
 const PORT = process.env.PORT || 5000;
 
-const server = app.listen(PORT, "127.0.0.1", async () => {
-    console.log(`🚀 Server running on http://127.0.0.1:${PORT}`);
-
-    try {
-        await connectDB();
-        console.log("✅ MongoDB Connected Successfully");
-    } catch (err) {
-        console.log("❌ MongoDB ERROR:", err.message);
-    }
-});
-
-// ================= DEBUG EVENTS =================
-server.on("listening", () => {
-    console.log("✅ SERVER IS ACTUALLY LISTENING");
-});
-
-server.on("error", (err) => {
-    console.log("❌ SERVER ERROR:", err.message);
-});
-
-// ================= GLOBAL ERROR HANDLERS =================
-process.on("uncaughtException", (err) => {
-    console.log("❌ UNCAUGHT ERROR:", err.message);
-});
-
-process.on("unhandledRejection", (err) => {
-    console.log("❌ UNHANDLED REJECTION:", err);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
