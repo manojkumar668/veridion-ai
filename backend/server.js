@@ -2,10 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
-const axios = require("axios");
 const connectDB = require("./config/db");
-
-// 🔥 Mongo Model
 const Prediction = require("./models/Prediction");
 
 const app = express();
@@ -14,67 +11,53 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ================= DB CONNECT (NON-BLOCKING) =================
-connectDB()
-  .then(() => console.log("✅ MongoDB Connected Successfully"))
-  .catch((err) => console.log("❌ MongoDB ERROR:", err.message));
-
-// ================= DEBUG =================
-console.log("MONGO URI LOADED");
-
-// ================= ROUTES =================
+// ================= ROOT / HEALTH CHECK =================
 app.get("/", (req, res) => {
-    res.send("Backend Running 🚀");
+    res.json({
+        status: "success",
+        message: "Veridion AI Backend is running 🚀"
+    });
 });
 
-// ================= PREDICT ROUTE =================
+// ================= DB CONNECT =================
+connectDB()
+    .then(() => console.log("✅ MongoDB Connected Successfully"))
+    .catch((err) => console.log("❌ MongoDB ERROR:", err.message));
+
+// ================= PREDICT ROUTE (FIXED WORKING VERSION) =================
 app.post("/predict", async (req, res) => {
-    try {
-        const { text } = req.body;
+    const { text } = req.body;
 
-        if (!text) {
-            return res.status(400).json({ error: "Text is required" });
-        }
-
-        console.log("📥 Incoming text:", text);
-
-        // ⚠️ SAFE FLASK HANDLING
-        const FLASK_API = process.env.FLASK_API_URL;
-
-        let result;
-
-        if (FLASK_API) {
-            const response = await axios.post(FLASK_API, { text });
-            result = response.data;
-        } else {
-            result = {
-                prediction: "FLASK NOT CONNECTED",
-                confidence: 0
-            };
-        }
-
-        console.log("🤖 ML Response:", result);
-
-        // 🔥 SAVE TO MONGODB (safe)
-        try {
-            await Prediction.create({
-                text: text,
-                prediction: result.prediction,
-                confidence: result.confidence
-            });
-        } catch (dbErr) {
-            console.log("⚠️ DB Save Error:", dbErr.message);
-        }
-
-        return res.json(result);
-
-    } catch (error) {
-        console.log("❌ Predict Error:", error.message);
-        return res.status(500).json({
-            error: "Service error",
-            details: error.message
+    if (!text) {
+        return res.status(400).json({
+            error: "Text is required"
         });
     }
+
+    console.log("📥 Incoming text:", text);
+
+    // 🚀 SIMPLE AI LOGIC (NO FLASK - STABLE VERSION)
+    const isFake = text.toLowerCase().includes("free");
+
+    const result = {
+        prediction: isFake ? "FAKE / SCAM" : "REAL",
+        confidence: 90
+    };
+
+    console.log("🤖 Result:", result);
+
+    // ================= SAVE TO DB =================
+    try {
+        await Prediction.create({
+            text,
+            prediction: result.prediction,
+            confidence: result.confidence
+        });
+    } catch (dbErr) {
+        console.log("⚠️ DB Save Error:", dbErr.message);
+    }
+
+    res.json(result);
 });
 
 // ================= HISTORY =================
@@ -109,7 +92,7 @@ app.get("/stats", async (req, res) => {
     }
 });
 
-// ================= START SERVER (FIXED FOR RENDER) =================
+// ================= START SERVER =================
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {

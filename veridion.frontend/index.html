@@ -41,19 +41,15 @@ body.light .sidebar{background:#f4f4f4}
     border-bottom:1px solid rgba(255,255,255,0.05)
 }
 
-/* ✅ FIXED TITLE */
 .title{
     position:absolute;
     left:50%;
     transform:translateX(-50%);
     font-size:22px;
     font-weight:600;
-
     background:linear-gradient(90deg,#6366f1,#8b5cf6,#22c55e);
-
     background-clip:text;
     -webkit-background-clip:text;
-
     -webkit-text-fill-color:transparent;
 }
 
@@ -71,6 +67,7 @@ body.light .sidebar{background:#f4f4f4}
     max-width:65%;padding:8px 10px;border-radius:10px;
     margin-bottom:6px;font-size:13px;
 }
+
 .user{align-self:flex-end;background:#2b2f3a}
 .bot{align-self:flex-start;background:#1a1d26}
 
@@ -134,6 +131,8 @@ body.light .sidebar{background:#f4f4f4}
 
 <script>
 
+const API_URL = "https://veridion-ai-5.onrender.com/predict";
+
 const chatBox = document.getElementById("chatBox");
 const input = document.getElementById("input");
 const historyList = document.getElementById("historyList");
@@ -154,7 +153,11 @@ return div;
 /* RESULT */
 function createResultCard(data,text){
 
-let reason = data.prediction.includes("FAKE")
+let label = data.prediction || "Unknown";
+let confidence = data.confidence || 0;
+let reply = data.reply || "";
+
+let reason = label.includes("FAKE")
 ? "Suspicious / scam pattern detected"
 : "Safe content";
 
@@ -162,14 +165,15 @@ let card=document.createElement("div");
 card.className="result-card";
 
 card.innerHTML=`
-<b>${data.prediction}</b> (${data.confidence}%)
+<b>${label}</b> (${confidence}%)
+<br><br>
+${reply}
 <br><br>
 Reason: ${reason}
 `;
 
 chatBox.appendChild(card);
 
-/* HISTORY */
 let item={q:text,res:card.innerHTML};
 historyData.push(item);
 
@@ -189,16 +193,7 @@ chatBox.appendChild(d);
 historyList.appendChild(h);
 }
 
-/* THINKING */
-async function fakeThinking(bot){
-let steps=["Analyzing...","Detecting patterns...","Checking credibility..."];
-for(let s of steps){
-bot.innerText=s;
-await new Promise(r=>setTimeout(r,500));
-}
-}
-
-/* 🚀 API CALL FIXED (RENDER BACKEND) */
+/* SAFE SEND FUNCTION (FIXED) */
 async function send(){
 let text=input.value.trim();
 if(!text) return;
@@ -206,25 +201,25 @@ if(!text) return;
 addMsg(text,"user");
 input.value="";
 
-let bot=addMsg("Analyzing...","bot");
-
-await fakeThinking(bot);
+let bot=addMsg("Checking credibility...","bot");
 
 try{
-    let res=await fetch("https://veridion-ai.onrender.com/predict", {
+    let res = await fetch(API_URL,{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({text})
     });
 
-    let data=await res.json();
+    let data = await res.json();
+
+    console.log("API RESPONSE:", data);
 
     bot.remove();
     createResultCard(data,text);
 
 }catch(err){
     console.log(err);
-    bot.innerText="Server error";
+    bot.innerText = "❌ Backend error / no response";
 }
 }
 
@@ -243,16 +238,6 @@ function toggleSidebar(){
 sidebar.classList.toggle("hidden");
 }
 
-/* UPLOAD */
-function openUpload(){
-let c=prompt("1=File\n2=Link");
-if(c=="1") document.getElementById("fileInput").click();
-else if(c=="2"){
-let l=prompt("Paste link:");
-if(l) input.value=l;
-}
-}
-
 /* VOICE */
 function startVoice(){
 if(!('webkitSpeechRecognition' in window)){
@@ -266,6 +251,16 @@ rec.start();
 rec.onresult=(e)=>{
 input.value=e.results[0][0].transcript;
 };
+}
+
+/* UPLOAD */
+function openUpload(){
+let c=prompt("1=File\n2=Link");
+if(c=="1") document.getElementById("fileInput").click();
+else if(c=="2"){
+let l=prompt("Paste link:");
+if(l) input.value=l;
+}
 }
 
 </script>
