@@ -131,7 +131,7 @@ body.light .sidebar{background:#f4f4f4}
 
 <script>
 
-const API_URL = "https://veridion-ai-5.onrender.com/predict";
+const API_URL = "https://veridion-ai-8.onrender.com/predict";
 
 const chatBox = document.getElementById("chatBox");
 const input = document.getElementById("input");
@@ -158,8 +158,8 @@ let confidence = data.confidence || 0;
 let reply = data.reply || "";
 
 let reason = label.includes("FAKE")
-? "Suspicious / scam pattern detected"
-: "Safe content";
+? "🚨 Suspicious / scam pattern detected"
+: "✅ Safe content";
 
 let card=document.createElement("div");
 card.className="result-card";
@@ -174,6 +174,7 @@ Reason: ${reason}
 
 chatBox.appendChild(card);
 
+/* HISTORY */
 let item={q:text,res:card.innerHTML};
 historyData.push(item);
 
@@ -193,18 +194,18 @@ chatBox.appendChild(d);
 historyList.appendChild(h);
 }
 
-/* SAFE SEND FUNCTION (FIXED) */
+/* 🚀 FINAL SEND FUNCTION */
 async function send(){
-let text=input.value.trim();
+let text = input.value.trim();
 if(!text) return;
 
 addMsg(text,"user");
 input.value="";
 
-let bot=addMsg("Checking credibility...","bot");
+let bot = addMsg("Connecting to server...","bot");
 
 try{
-    let res = await fetch(API_URL,{
+    let res = await fetch(API_URL, {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({text})
@@ -215,11 +216,11 @@ try{
     console.log("API RESPONSE:", data);
 
     bot.remove();
-    createResultCard(data,text);
+    createResultCard(data, text);
 
 }catch(err){
-    console.log(err);
-    bot.innerText = "❌ Backend error / no response";
+    console.log("ERROR:", err);
+    bot.innerText = "Server waking up... please wait ⏳";
 }
 }
 
