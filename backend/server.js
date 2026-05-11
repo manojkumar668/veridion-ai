@@ -2,19 +2,19 @@ require("dotenv").config();
 
 const express = require("express");
 const cors = require("cors");
+
 const connectDB = require("./config/db");
 const Prediction = require("./models/Prediction");
 
 const app = express();
 
-// ================= CORS FIX (IMPORTANT) =================
+// ================= CORS FIX =================
 app.use(cors({
     origin: "*",
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"]
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"]
 }));
 
-// 🔥 FIX for preflight requests
 app.options("*", cors());
 
 // ================= MIDDLEWARE =================
@@ -22,119 +22,181 @@ app.use(express.json());
 
 // ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
+
     res.status(200).json({
-        status: "success",
-        message: "Veridion AI Backend is running 🚀"
+        success: true,
+        message: "🚀 Veridion AI Backend Running"
     });
+
 });
 
-// ================= DB CONNECT =================
+// ================= DATABASE CONNECTION =================
 connectDB()
-    .then(() => console.log("✅ MongoDB Connected Successfully"))
-    .catch(err => console.log("❌ MongoDB ERROR:", err.message));
+    .then(() => {
 
-// ================= PREDICT =================
+        console.log("✅ MongoDB Connected Successfully");
+
+    })
+    .catch((err) => {
+
+        console.log("❌ MongoDB Connection Error:", err.message);
+
+    });
+
+// ================= PREDICT ROUTE =================
 app.post("/predict", async (req, res) => {
+
     try {
+
         const { text } = req.body;
 
-        if (!text) {
+        // ================= VALIDATION =================
+        if (!text || text.trim() === "") {
+
             return res.status(400).json({
                 success: false,
                 error: "Text is required"
             });
+
         }
 
-        console.log("📥 Incoming text:", text);
+        console.log("📥 Incoming Text:", text);
 
-        // 🔥 SIMPLE AI LOGIC
-        const isFake = text.toLowerCase().includes("free");
+        // ================= SIMPLE AI DETECTION =================
+        const lowerText = text.toLowerCase();
 
+        let prediction = "REAL";
+        let confidence = 95;
+
+        if (
+            lowerText.includes("free") ||
+            lowerText.includes("won") ||
+            lowerText.includes("click below") ||
+            lowerText.includes("claim now") ||
+            lowerText.includes("lottery") ||
+            lowerText.includes("5 lakhs") ||
+            lowerText.includes("urgent") ||
+            lowerText.includes("limited offer")
+        ) {
+
+            prediction = "FAKE / SCAM";
+            confidence = 98;
+
+        }
+
+        // ================= RESULT =================
         const result = {
             success: true,
-            prediction: isFake ? "FAKE / SCAM" : "REAL",
-            confidence: 90
+            prediction,
+            confidence
         };
 
-        console.log("🤖 Result:", result);
+        console.log("🤖 Prediction Result:", result);
 
-        // ================= SAVE TO DB =================
+        // ================= SAVE TO DATABASE =================
         try {
+
             await Prediction.create({
                 text,
-                prediction: result.prediction,
-                confidence: result.confidence
+                prediction,
+                confidence
             });
+
+            console.log("✅ Prediction Saved");
+
         } catch (dbErr) {
-            console.log("⚠️ DB Error:", dbErr.message);
+
+            console.log("⚠️ Database Save Error:", dbErr.message);
+
         }
 
+        // ================= RESPONSE =================
         return res.status(200).json(result);
 
     } catch (error) {
-        console.log("❌ Predict Error:", error.message);
+
+        console.log("❌ Predict Route Error:", error.message);
 
         return res.status(500).json({
             success: false,
             error: "Internal Server Error"
         });
+
     }
+
 });
 
-// ================= HISTORY =================
+// ================= HISTORY ROUTE =================
 app.get("/history", async (req, res) => {
+
     try {
-        const data = await Prediction.find()
+
+        const history = await Prediction.find()
             .sort({ createdAt: -1 })
             .limit(10);
 
-        res.json({
+        return res.status(200).json({
             success: true,
-            data
+            data: history
         });
 
-    } catch (err) {
-        res.status(500).json({
+    } catch (error) {
+
+        return res.status(500).json({
             success: false,
-            error: err.message
+            error: error.message
         });
+
     }
+
 });
 
-// ================= STATS =================
+// ================= STATS ROUTE =================
 app.get("/stats", async (req, res) => {
+
     try {
+
         const total = await Prediction.countDocuments();
+
         const fake = await Prediction.countDocuments({
             prediction: "FAKE / SCAM"
         });
 
-        res.json({
+        const real = total - fake;
+
+        return res.status(200).json({
             success: true,
             total,
             fake,
-            real: total - fake
+            real
         });
 
-    } catch (err) {
-        res.status(500).json({
+    } catch (error) {
+
+        return res.status(500).json({
             success: false,
-            error: err.message
+            error: error.message
         });
+
     }
+
 });
 
-// ================= 404 =================
+// ================= 404 ROUTE =================
 app.use((req, res) => {
+
     res.status(404).json({
         success: false,
-        error: "Route not found"
+        error: "Route Not Found"
     });
+
 });
 
 // ================= START SERVER =================
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 Server running on port ${PORT}`);
+
+    console.log(`🚀 Server Running On Port ${PORT}`);
+
 });
