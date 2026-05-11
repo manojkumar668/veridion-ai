@@ -48,7 +48,6 @@ body.light .sidebar{background:#f4f4f4}
     font-size:22px;
     font-weight:600;
     background:linear-gradient(90deg,#6366f1,#8b5cf6,#22c55e);
-    background-clip:text;
     -webkit-background-clip:text;
     -webkit-text-fill-color:transparent;
 }
@@ -130,7 +129,9 @@ body.light .sidebar{background:#f4f4f4}
 </div>
 
 <script>
+console.log("SCRIPT LOADED SUCCESSFULLY 🚀");
 
+/* ✅ FINAL BACKEND URL */
 const API_URL = "https://veridion-ai-8.onrender.com/predict";
 
 const chatBox = document.getElementById("chatBox");
@@ -138,9 +139,6 @@ const input = document.getElementById("input");
 const historyList = document.getElementById("historyList");
 const sidebar = document.getElementById("sidebar");
 
-let historyData = [];
-
-/* MESSAGE */
 function addMsg(text,type){
 let div=document.createElement("div");
 div.className="msg "+type;
@@ -150,12 +148,10 @@ chatBox.scrollTop=chatBox.scrollHeight;
 return div;
 }
 
-/* RESULT */
 function createResultCard(data,text){
 
 let label = data.prediction || "Unknown";
-let confidence = data.confidence || 0;
-let reply = data.reply || "";
+let confidence = data.confidence ?? 0;
 
 let reason = label.includes("FAKE")
 ? "🚨 Suspicious / scam pattern detected"
@@ -167,34 +163,12 @@ card.className="result-card";
 card.innerHTML=`
 <b>${label}</b> (${confidence}%)
 <br><br>
-${reply}
-<br><br>
 Reason: ${reason}
 `;
 
 chatBox.appendChild(card);
-
-/* HISTORY */
-let item={q:text,res:card.innerHTML};
-historyData.push(item);
-
-let h=document.createElement("div");
-h.className="history-item";
-h.innerText=text.substring(0,25)+"...";
-
-h.onclick=()=>{
-chatBox.innerHTML="";
-addMsg(item.q,"user");
-let d=document.createElement("div");
-d.className="result-card";
-d.innerHTML=item.res;
-chatBox.appendChild(d);
-};
-
-historyList.appendChild(h);
 }
 
-/* 🚀 FINAL SEND FUNCTION */
 async function send(){
 let text = input.value.trim();
 if(!text) return;
@@ -202,17 +176,22 @@ if(!text) return;
 addMsg(text,"user");
 input.value="";
 
-let bot = addMsg("Connecting to server...","bot");
+let bot = addMsg("Checking credibility...","bot");
 
 try{
+    console.log("Sending request...");
+
     let res = await fetch(API_URL, {
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body:JSON.stringify({text})
     });
 
-    let data = await res.json();
+    if(!res.ok){
+        throw new Error("HTTP Error " + res.status);
+    }
 
+    let data = await res.json();
     console.log("API RESPONSE:", data);
 
     bot.remove();
@@ -220,50 +199,38 @@ try{
 
 }catch(err){
     console.log("ERROR:", err);
-    bot.innerText = "Server waking up... please wait ⏳";
+    bot.innerText = "❌ Backend error / server sleeping";
 }
 }
 
-/* ENTER */
 input.addEventListener("keydown",e=>{
 if(e.key==="Enter") send();
 });
 
-/* THEME */
 function toggleTheme(){
 document.body.classList.toggle("light");
 }
 
-/* SIDEBAR */
 function toggleSidebar(){
 sidebar.classList.toggle("hidden");
 }
 
-/* VOICE */
 function startVoice(){
 if(!('webkitSpeechRecognition' in window)){
 alert("Not supported");
 return;
 }
-
 let rec=new webkitSpeechRecognition();
 rec.start();
-
 rec.onresult=(e)=>{
 input.value=e.results[0][0].transcript;
 };
 }
 
-/* UPLOAD */
 function openUpload(){
 let c=prompt("1=File\n2=Link");
 if(c=="1") document.getElementById("fileInput").click();
-else if(c=="2"){
-let l=prompt("Paste link:");
-if(l) input.value=l;
 }
-}
-
 </script>
 
 </body>

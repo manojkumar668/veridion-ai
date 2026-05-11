@@ -7,15 +7,20 @@ const Prediction = require("./models/Prediction");
 
 const app = express();
 
-// ================= MIDDLEWARE =================
+// ================= CORS FIX (IMPORTANT) =================
 app.use(cors({
-    origin: "*",   // ✅ allow Netlify frontend
-    methods: ["GET", "POST"]
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"]
 }));
 
+// 🔥 FIX for preflight requests
+app.options("*", cors());
+
+// ================= MIDDLEWARE =================
 app.use(express.json());
 
-// ================= ROOT / HEALTH CHECK =================
+// ================= HEALTH CHECK =================
 app.get("/", (req, res) => {
     res.status(200).json({
         status: "success",
@@ -26,9 +31,9 @@ app.get("/", (req, res) => {
 // ================= DB CONNECT =================
 connectDB()
     .then(() => console.log("✅ MongoDB Connected Successfully"))
-    .catch((err) => console.log("❌ MongoDB ERROR:", err.message));
+    .catch(err => console.log("❌ MongoDB ERROR:", err.message));
 
-// ================= PREDICT ROUTE =================
+// ================= PREDICT =================
 app.post("/predict", async (req, res) => {
     try {
         const { text } = req.body;
@@ -42,7 +47,7 @@ app.post("/predict", async (req, res) => {
 
         console.log("📥 Incoming text:", text);
 
-        // 🚀 SIMPLE AI LOGIC (TEMP)
+        // 🔥 SIMPLE AI LOGIC
         const isFake = text.toLowerCase().includes("free");
 
         const result = {
@@ -61,7 +66,7 @@ app.post("/predict", async (req, res) => {
                 confidence: result.confidence
             });
         } catch (dbErr) {
-            console.log("⚠️ DB Save Error:", dbErr.message);
+            console.log("⚠️ DB Error:", dbErr.message);
         }
 
         return res.status(200).json(result);
@@ -81,10 +86,9 @@ app.get("/history", async (req, res) => {
     try {
         const data = await Prediction.find()
             .sort({ createdAt: -1 })
-            .limit(10)
-            .select("-__v");
+            .limit(10);
 
-        res.status(200).json({
+        res.json({
             success: true,
             data
         });
@@ -105,7 +109,7 @@ app.get("/stats", async (req, res) => {
             prediction: "FAKE / SCAM"
         });
 
-        res.status(200).json({
+        res.json({
             success: true,
             total,
             fake,
@@ -120,7 +124,7 @@ app.get("/stats", async (req, res) => {
     }
 });
 
-// ================= 404 HANDLER =================
+// ================= 404 =================
 app.use((req, res) => {
     res.status(404).json({
         success: false,
