@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+body{
+    margin:0;
+    height:100vh;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    font-family:Inter;
+    background:#f5f5f5;
+}
+
+/* responsive card */
+.card{
+    width:90%;
+    max-width:380px;
+    padding:28px;
+    border-radius:16px;
+    border:1px solid #e5e7eb;
+    text-align:center;
+    background:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
+}
+
+h2{
+    margin-bottom:15px;
+    font-weight:700;
+    letter-spacing:1px;
+}
+
+input{
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+    text-align:center;
+    font-size:15px;
+    border-radius:10px;
+    border:1px solid #e5e7eb;
+    outline:none;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    background:#000;
+    color:#fff;
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    font-weight:600;
+    transition:0.2s;
+}
+
+button:hover{
+    opacity:0.9;
+    transform:scale(1.02);
+}
+
+button:disabled{
+    background:#888;
+    cursor:not-allowed;
+}
+
+#msg{
+    margin-top:10px;
+    font-size:13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="card">
+
+    <h2>VERIDION AI LOGIN</h2>
+
+    <input id="email" placeholder="Enter Email">
+    <button id="otpBtn" onclick="sendOTP()">Send OTP</button>
+
+    <div id="msg"></div>
+
+</div>
+
+<script>
+
+let otpSent = false;
+let cooldown = 30; // seconds
+
+async function sendOTP(){
+
+    let email = document.getElementById("email").value.trim();
+    let btn = document.getElementById("otpBtn");
+    let msg = document.getElementById("msg");
+
+    if(!email){
+        msg.innerText = "Enter email";
+        msg.style.color = "red";
+        return;
+    }
+
+    if(otpSent){
+        msg.innerText = "OTP already sent. Wait...";
+        msg.style.color = "orange";
+        return;
+    }
+
+    otpSent = true;
+    btn.disabled = true;
+
+    // store email for OTP page
+    localStorage.setItem("veridion_email", email);
+
+    msg.innerText = "Sending OTP...";
+    msg.style.color = "black";
+
+    try {
+        let res = await fetch("/send-otp", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({email})
+        });
+
+        let data = await res.json();
+
+        if(data.success){
+            msg.innerText = "OTP sent successfully!";
+            msg.style.color = "green";
+
+            // redirect after short delay
+            setTimeout(()=>{
+                window.location.href = "/otp";
+            }, 800);
+
+        } else {
+            msg.innerText = "Failed to send OTP";
+            msg.style.color = "red";
+
+            otpSent = false;
+            btn.disabled = false;
+        }
+
+    } catch(err){
+        msg.innerText = "Server error";
+        msg.style.color = "red";
+
+        otpSent = false;
+        btn.disabled = false;
+    }
+
+    // cooldown reset (production safety)
+    let timer = setInterval(()=>{
+        btn.innerText = `Wait ${cooldown}s`;
+        cooldown--;
+
+        if(cooldown <= 0){
+            clearInterval(timer);
+            btn.innerText = "Send OTP";
+            btn.disabled = false;
+            otpSent = false;
+            cooldown = 30;
+        }
+    }, 1000);
+}
+
+</script>
+
+</body>
+</html>
