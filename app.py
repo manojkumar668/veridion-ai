@@ -1,23 +1,36 @@
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import random
 import smtplib
 import os
+import time
 from dotenv import load_dotenv
 
 # ================= BASE DIR =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ================= LOAD ENV =================
+# ================= ENV LOAD =================
 load_dotenv(dotenv_path=os.path.join(BASE_DIR, "backend", ".env"))
 
-# ================= APP INIT =================
+# ================= APP =================
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
 app.secret_key = "veridion_secret_key"
 CORS(app)
 
+# ================= RATE LIMITER =================
+limiter = Limiter(
+    get_remote_address,
+    app=app,
+    default_limits=["200 per day", "50 per hour"]
+)
+
 # ================= OTP STORE =================
 otp_store = {}
+
+OTP_EXPIRY = 300   # 5 minutes
+OTP_COOLDOWN = 30   # 30 seconds
 
 # ================= EMAIL CONFIG =================
 EMAIL = os.getenv("EMAIL_USER")
@@ -25,9 +38,6 @@ APP_PASSWORD = os.getenv("EMAIL_PASS")
 
 print("📧 EMAIL:", EMAIL)
 print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
-
-if not EMAIL or not APP_PASSWORD:
-    print("❌ ERROR: .env missing EMAIL_USER / EMAIL_PASS")
 
 
 # ================= EMAIL SENDER =================
@@ -45,6 +55,101 @@ def send_otp_email(to_email, otp):
 
     except Exception as e:
         print("❌ EMAIL ERROR:", e)
+
+
+# ================= SEND OTP =================
+@app.route("/send-otp", methods=["POST"])
+@limiter.limit("5 per minute")
+def send_otp():
+    data = request.json
+    email = data.get("email", "").strip().lower()
+
+    if not email:
+        return jsonify({"success": False, "message": "Email required"})
+
+    now = time.time()
+
+    # cooldown check
+    if email in otp_store:
+        last = otp_store[email].get("time", 0)
+        if now - last < OTP_COOLDOWN:
+            return jsonify({
+                "success": False,
+                "message": "Wait before requesting new OTP"
+            })
+
+    otp = str(random.randint(100000, 999999))
+
+    otp_store[email] = {
+        "otp": otp,
+        "time": now,
+        "used": False
+    }
+
+    send_otp_email(email, otp)
+
+    return jsonify({"success": True})
+
+
+# ================= VERIFY OTP =================
+@app.route("/verify-otp", methods=["POST"])
+def verify_otp():
+    data = request.json
+    email = data.get("email", "").strip().lower()
+    otp = data.get("otp", "").strip()
+
+    record = otp_store.get(email)
+
+    if not record:
+        return jsonify({"success": False, "message": "OTP not found"})
+
+    # expiry check
+    if time.time() - record["time"] > OTP_EXPIRY:
+        otp_store.pop(email, None)
+        return jsonify({"success": False, "message": "OTP expired"})
+
+    if record["used"]:
+        return jsonify({"success": False, "message": "OTP already used"})
+
+    if record["otp"] == otp:
+        otp_store[email]["used"] = True
+        session["user"] = email
+        return jsonify({"success": True})
+
+    return jsonify({"success": False, "message": "Invalid OTP"})
+
+
+# ================= PREDICT =================
+@app.route("/predict", methods=["POST"])
+def predict():
+    text = request.json.get("text", "").lower()
+
+    scam_keywords = ["win", "lottery", "free", "money", "prize"]
+
+    if any(word in text for word in scam_keywords):
+        return jsonify({
+            "prediction": "FAKE",
+            "confidence": "92%",
+            "reason": [
+                "Detected scam patterns",
+                "Suspicious reward claims",
+                "Phishing behavior match",
+                "No verified source",
+                "High fraud probability"
+            ]
+        })
+
+    return jsonify({
+        "prediction": "REAL",
+        "confidence": "87%",
+        "reason": [
+            "Normal language detected",
+            "No scam keywords",
+            "Trusted communication pattern",
+            "Low risk signals",
+            "Safe content"
+        ]
+    })
 
 
 # ================= ROUTES =================
@@ -65,109 +170,14 @@ def chat():
     return render_template("index.html")
 
 
-# ================= SEND OTP =================
-@app.route("/send-otp", methods=["POST"])
-def send_otp():
-    data = request.json or {}
-    email = data.get("email", "").strip().lower()
-
-    if not email:
-        return jsonify({"success": False, "message": "Email required"})
-
-    otp = str(random.randint(100000, 999999))
-
-    # 🔥 SINGLE ACTIVE OTP PER EMAIL
-    otp_store[email] = {
-        "otp": otp,
-        "used": False
-    }
-
-    session["temp_email"] = email
-
-    print("📩 EMAIL:", email)
-    print("🔐 OTP:", otp)
-
-    send_otp_email(email, otp)
-
-    return jsonify({"success": True})
-
-
-# ================= VERIFY OTP =================
-@app.route("/verify-otp", methods=["POST"])
-def verify_otp():
-    data = request.json or {}
-    email = data.get("email", "").strip().lower()
-    otp = data.get("otp", "").strip()
-
-    if not email or not otp:
-        return jsonify({"success": False})
-
-    record = otp_store.get(email)
-
-    # ❌ no OTP found
-    if not record:
-        return jsonify({"success": False})
-
-    # ❌ already used
-    if record["used"]:
-        return jsonify({"success": False})
-
-    # ✅ correct OTP
-    if record["otp"] == otp:
-        otp_store[email]["used"] = True
-        session["user"] = email
-        return jsonify({"success": True})
-
-    return jsonify({"success": False})
-
-
-# ================= AI PREDICT =================
-@app.route("/predict", methods=["POST"])
-def predict():
-    data = request.json or {}
-    text = data.get("text", "").lower()
-
-    if any(word in text for word in ["win", "lottery", "prize", "free", "money"]):
-        return jsonify({
-            "prediction": "FAKE",
-            "confidence": "92%",
-            "reason": [
-                "Suspicious promotional language detected",
-                "Unrealistic reward claims",
-                "Pattern matches scam dataset",
-                "No verified source found",
-                "High phishing probability"
-            ]
-        })
-
-    return jsonify({
-        "prediction": "REAL",
-        "confidence": "87%",
-        "reason": [
-            "Neutral tone detected",
-            "No scam keywords found",
-            "Matches trusted patterns",
-            "Low risk signals",
-            "Content appears safe"
-        ]
-    })
-
-
-# ================= MAIL TEST =================
-@app.route("/mail-test")
-def mail_test():
-    send_otp_email(EMAIL, "123456")
-    return "Mail test sent"
-
-
-# ================= LOGOUT =================
 @app.route("/logout")
 def logout():
     session.clear()
     return redirect(url_for("login"))
 
 
-# ================= RUN =================
+# ================= RUN (RENDER FIX) =================
 if __name__ == "__main__":
-    print("🚀 Server running: http://127.0.0.1:5000")
-    app.run(debug=True)
+    import os
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
