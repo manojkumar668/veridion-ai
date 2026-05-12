@@ -30,7 +30,7 @@ limiter = Limiter(
 otp_store = {}
 
 OTP_EXPIRY = 300   # 5 minutes
-OTP_COOLDOWN = 30   # 30 seconds
+OTP_COOLDOWN = 30  # 30 seconds
 
 # ================= EMAIL CONFIG =================
 EMAIL = os.getenv("EMAIL_USER")
@@ -69,7 +69,6 @@ def send_otp():
 
     now = time.time()
 
-    # cooldown check
     if email in otp_store:
         last = otp_store[email].get("time", 0)
         if now - last < OTP_COOLDOWN:
@@ -103,7 +102,6 @@ def verify_otp():
     if not record:
         return jsonify({"success": False, "message": "OTP not found"})
 
-    # expiry check
     if time.time() - record["time"] > OTP_EXPIRY:
         otp_store.pop(email, None)
         return jsonify({"success": False, "message": "OTP expired"})
@@ -176,8 +174,7 @@ def logout():
     return redirect(url_for("login"))
 
 
-# ================= RUN (RENDER FIX) =================
+# ================= RUN (RENDER SAFE) =================
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
