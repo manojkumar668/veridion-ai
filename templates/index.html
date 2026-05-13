@@ -2,410 +2,171 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Veridion AI</title>
+<title>Login</title>
 
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-
-/* ================= CORE ================= */
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    font-family: Inter;
-}
-
-body {
-    height: 100vh;
-    overflow: hidden;
-}
-
-.container {
-    display: flex;
-    height: 100vh;
-    width: 100%;
-}
-
-/* SIDEBAR IMPROVED */
-.sidebar {
-    width: 240px;
-    background: #f7f7f7;
-    border-right: 1px solid #e5e7eb;
-    display: flex;
-    flex-direction: column;
-    padding: 12px;
-    gap:12px;
-}
-
-/* IMPROVED BUTTONS */
-.sidebar button {
-    padding: 12px;
-    border: none;
-    border-radius: 12px;
-    background: #fff;
-    font-weight: 600;
-    cursor: pointer;
-    transition: 0.25s;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
-}
-
-.sidebar button:hover {
-    transform: translateY(-2px);
-    background: #000;
-    color: #fff;
-}
-
-/* MAIN */
-.main {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
-/* THEME */
-:root{
-    --bg:#fff;
-    --text:#000;
-    --panel:#f5f5f5;
-    --border:#ddd;
-}
-
-body.dark{
-    --bg:#0f0f0f;
-    --text:#fff;
-    --panel:#1a1a1a;
-    --border:#333;
-}
-
 body{
-    background:var(--bg);
-    color:var(--text);
-}
-
-/* HEADER */
-.header{
-    padding:12px;
-    border-bottom:1px solid var(--border);
+    margin:0;
+    height:100vh;
     display:flex;
-    justify-content:space-between;
+    justify-content:center;
     align-items:center;
+    font-family:Inter;
+    background:#f5f5f5;
 }
 
-.title{
-    font-size:20px;
-    font-weight:800;
+/* responsive card */
+.card{
+    width:90%;
+    max-width:380px;
+    padding:28px;
+    border-radius:16px;
+    border:1px solid #e5e7eb;
     text-align:center;
-    flex:1;
+    background:#fff;
+    box-shadow:0 10px 30px rgba(0,0,0,0.08);
 }
 
-/* CHAT */
-.chat{
-    flex:1;
-    padding:15px;
-    overflow:auto;
-    display:flex;
-    flex-direction:column;
-    gap:10px;
-}
-
-.msg{
-    max-width:75%;
-    padding:12px;
-    border-radius:10px;
-    white-space:pre-line;
-    font-size:13px;
-}
-
-.user{background:#000;color:#fff;align-self:flex-end;}
-.bot{background:var(--panel);border:1px solid var(--border);align-self:flex-start;}
-
-/* INPUT */
-.inputBar{
-    display:flex;
-    gap:6px;
-    padding:10px;
-    border-top:1px solid var(--border);
+h2{
+    margin-bottom:15px;
+    font-weight:700;
+    letter-spacing:1px;
 }
 
 input{
-    flex:1;
-    padding:10px;
-    border:1px solid var(--border);
-    border-radius:8px;
+    width:100%;
+    padding:12px;
+    margin:10px 0;
+    text-align:center;
+    font-size:15px;
+    border-radius:10px;
+    border:1px solid #e5e7eb;
+    outline:none;
 }
 
-/* SEND BUTTON IMPROVED */
-.sendBtn{
-    width:50px;
+button{
+    width:100%;
+    padding:12px;
+    background:#000;
+    color:#fff;
     border:none;
-    background:#000;
-    color:#fff;
     border-radius:10px;
     cursor:pointer;
+    font-weight:600;
     transition:0.2s;
 }
 
-.sendBtn:hover{
-    transform:scale(1.1);
+button:hover{
+    opacity:0.9;
+    transform:scale(1.02);
 }
 
-/* POPUP */
-.popup{
-    position:absolute;
-    bottom:70px;
-    left:10px;
-    width:220px;
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:10px;
-    display:none;
-    flex-direction:column;
-    gap:10px;
+button:disabled{
+    background:#888;
+    cursor:not-allowed;
 }
 
-/* VOICE BUTTON FIXED */
-.voiceBtn{
-    padding:8px;
-    border:1px solid var(--border);
-    background:transparent;
-    border-radius:8px;
-    cursor:pointer;
-    transition:0.2s;
+#msg{
+    margin-top:10px;
+    font-size:13px;
 }
-
-.voiceBtn:hover{
-    background:#000;
-    color:#fff;
-}
-
-.voiceBtn.active{
-    background:#000;
-    color:#fff;
-}
-
-/* PANEL */
-.panel{
-    position:fixed;
-    right:10px;
-    top:60px;
-    width:340px;
-    background:var(--panel);
-    border:1px solid var(--border);
-    border-radius:10px;
-    padding:10px;
-    display:none;
-}
-
 </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="card">
 
-<div class="sidebar">
-    <button onclick="toggleDash()">📊 Dashboard</button>
-    <button onclick="toggleHistory()">🕘 History</button>
-    <button onclick="toggleTheme()">🌓 Theme</button>
-</div>
+    <h2>VERIDION AI LOGIN</h2>
 
-<div class="main">
+    <input id="email" placeholder="Enter Email">
+    <button id="otpBtn" onclick="sendOTP()">Send OTP</button>
 
-<div class="header">
-    <div></div>
-    <div class="title">VERIDION AI</div>
-    <div id="loginTime"></div>
-</div>
-
-<div class="chat" id="chat"></div>
-
-<div class="inputBar">
-    <button onclick="togglePopup()">＋</button>
-    <input id="input" placeholder="Type message...">
-    <button class="sendBtn" onclick="send()">➤</button>
-</div>
-
-<div class="popup" id="popup">
-    <b>Voice</b>
-    <button class="voiceBtn active" onclick="setVoice('male')">Male</button>
-    <button class="voiceBtn" onclick="setVoice('female')">Female</button>
-</div>
+    <div id="msg"></div>
 
 </div>
-
-</div>
-
-<div class="panel" id="history"></div>
-<div class="panel" id="dash"><canvas id="chart"></canvas></div>
 
 <script>
 
-let history=[];
-let fake=0, real=0;
-let voiceType="male";
-let chart;
+let otpSent = false;
+let cooldown = 30; // seconds
 
-/* FIX: Voice loading */
-let voices = [];
+async function sendOTP(){
 
-function loadVoices(){
-    voices = speechSynthesis.getVoices();
-}
-loadVoices();
-speechSynthesis.onvoiceschanged = loadVoices;
+    let email = document.getElementById("email").value.trim();
+    let btn = document.getElementById("otpBtn");
+    let msg = document.getElementById("msg");
 
-document.getElementById("loginTime").innerText=new Date().toLocaleString();
-
-function addMsg(t,c){
-    let d=document.createElement("div");
-    d.className="msg "+c;
-    d.innerText=t;
-    document.getElementById("chat").appendChild(d);
-}
-
-/* POPUP */
-function togglePopup(){
-    let p=document.getElementById("popup");
-    p.style.display=(p.style.display==="flex")?"none":"flex";
-}
-
-/* FIXED VOICE SELECTION (MALE + FEMALE WORKING) */
-function setVoice(type){
-    voiceType=type;
-
-    document.querySelectorAll(".voiceBtn").forEach(b=>{
-        b.classList.remove("active");
-    });
-
-    event.target.classList.add("active");
-
-    document.getElementById("popup").style.display="none";
-}
-
-/* 🔥 FIXED SPEECH ENGINE */
-function speak(text){
-
-    let u = new SpeechSynthesisUtterance(text);
-
-    let female = voices.find(v =>
-        v.name.toLowerCase().includes("female") ||
-        v.name.toLowerCase().includes("zira") ||
-        v.lang.includes("en-US") && v.name.toLowerCase().includes("google")
-    );
-
-    let male = voices.find(v =>
-        v.name.toLowerCase().includes("male") ||
-        v.name.toLowerCase().includes("david") ||
-        v.name.toLowerCase().includes("mark")
-    );
-
-    if(voiceType === "female" && female){
-        u.voice = female;
-        u.pitch = 1.4;
-        u.rate = 1;
-    }
-    else if(voiceType === "male" && male){
-        u.voice = male;
-        u.pitch = 0.9;
-        u.rate = 1;
+    if(!email){
+        msg.innerText = "Enter email";
+        msg.style.color = "red";
+        return;
     }
 
-    speechSynthesis.cancel();
-    speechSynthesis.speak(u);
-}
+    if(otpSent){
+        msg.innerText = "OTP already sent. Wait...";
+        msg.style.color = "orange";
+        return;
+    }
 
-/* SEND */
-async function send(){
+    otpSent = true;
+    btn.disabled = true;
 
-    let input=document.getElementById("input");
-    let text=input.value.trim();
-    if(!text) return;
+    // store email for OTP page
+    localStorage.setItem("veridion_email", email);
 
-    addMsg(text,"user");
-    history.push(text);
-    updateHistory();
+    msg.innerText = "Sending OTP...";
+    msg.style.color = "black";
 
-    input.value="";
+    try {
+        let res = await fetch("/send-otp", {
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({email})
+        });
 
-    let res=await fetch("/predict",{
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({text})
-    });
+        let data = await res.json();
 
-    let data=await res.json();
+        if(data.success){
+            msg.innerText = "OTP sent successfully!";
+            msg.style.color = "green";
 
-    if(data.prediction==="FAKE") fake++;
-    else real++;
+            // redirect after short delay
+            setTimeout(()=>{
+                window.location.href = "/otp.html";
+            }, 800);
 
-    updateChart();
+        } else {
+            msg.innerText = "Failed to send OTP";
+            msg.style.color = "red";
 
-    let trust = data.prediction==="REAL"
-        ? "✔ You can trust this content."
-        : "❌ Do NOT trust this content.";
-
-    let output=
-`🧠 RESULT: ${data.prediction}
-
-📊 CONFIDENCE: ${data.confidence}
-
-📌 ANALYSIS:
-- ${data.reason.join("\n- ")}
-
-FINAL VERDICT:
-${trust}`;
-
-    addMsg(output,"bot");
-    speak(output);
-}
-
-/* HISTORY */
-function updateHistory(){
-    let h=document.getElementById("history");
-    h.innerHTML="<b>History</b><br>";
-    history.slice(-10).forEach(t=>{
-        h.innerHTML+="<div>"+t+"</div><hr>";
-    });
-}
-
-/* CHART */
-function updateChart(){
-
-    let total=fake+real;
-    let rf=total?Math.round((real/total)*100):0;
-    let ff=total?Math.round((fake/total)*100):0;
-
-    if(chart) chart.destroy();
-
-    chart=new Chart(document.getElementById("chart"),{
-        type:"pie",
-        data:{
-            labels:[`Real ${rf}%`,`Fake ${ff}%`],
-            datasets:[{
-                data:[real,fake],
-                backgroundColor:["green","red"]
-            }]
+            otpSent = false;
+            btn.disabled = false;
         }
-    });
-}
 
-/* PANELS */
-function toggleDash(){
-    let d=document.getElementById("dash");
-    d.style.display=(d.style.display==="block")?"none":"block";
-    updateChart();
-}
+    } catch(err){
+        msg.innerText = "Server error";
+        msg.style.color = "red";
 
-function toggleHistory(){
-    let h=document.getElementById("history");
-    h.style.display=(h.style.display==="block")?"none":"block";
-}
+        otpSent = false;
+        btn.disabled = false;
+    }
 
-function toggleTheme(){
-    document.body.classList.toggle("dark");
+    // cooldown reset (production safety)
+    let timer = setInterval(()=>{
+        btn.innerText = `Wait ${cooldown}s`;
+        cooldown--;
+
+        if(cooldown <= 0){
+            clearInterval(timer);
+            btn.innerText = "Send OTP";
+            btn.disabled = false;
+            otpSent = false;
+            cooldown = 30;
+        }
+    }, 1000);
 }
 
 </script>
