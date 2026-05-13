@@ -31,9 +31,8 @@ app.get("/otp", (req, res) => {
 });
 
 /* =======================================================
-   🚀 IMPORTANT FIX (THIS IS WHAT YOU ASKED)
+   🚀 IMPORTANT FIX
    /chat ALWAYS LOADS index.html
-   DO NOT USE chat.html anywhere in frontend
 ======================================================= */
 app.get("/chat", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -62,12 +61,16 @@ app.post("/send-otp", async (req, res) => {
         let { email } = req.body;
 
         if (!email) {
-            return res.json({ success: false, message: "Email required" });
+            return res.json({
+                success: false,
+                message: "Email required"
+            });
         }
 
         email = email.trim().toLowerCase();
 
         const otp = Math.floor(100000 + Math.random() * 900000);
+
         otpStore[email] = otp;
 
         console.log("📩 EMAIL:", email);
@@ -84,7 +87,11 @@ app.post("/send-otp", async (req, res) => {
 
     } catch (err) {
         console.log("MAIL ERROR:", err);
-        return res.status(500).json({ success: false });
+
+        return res.status(500).json({
+            success: false,
+            message: "Server error"
+        });
     }
 });
 
@@ -98,12 +105,20 @@ app.post("/verify-otp", (req, res) => {
 
     email = email.trim().toLowerCase();
 
-    if (otpStore[email] && String(otpStore[email]) === String(otp)) {
+    if (
+        otpStore[email] &&
+        String(otpStore[email]) === String(otp)
+    ) {
         delete otpStore[email];
-        return res.json({ success: true });
+
+        return res.json({
+            success: true
+        });
     }
 
-    return res.json({ success: false });
+    return res.json({
+        success: false
+    });
 });
 
 /* ================= FAKE DETECTION ================= */
@@ -111,15 +126,19 @@ app.post("/predict", (req, res) => {
     const text = req.body.text || "";
 
     if (text.toLowerCase().includes("win")) {
-        return res.json({ prediction: "FAKE" });
+        return res.json({
+            prediction: "FAKE"
+        });
     }
 
-    return res.json({ prediction: "REAL" });
+    return res.json({
+        prediction: "REAL"
+    });
 });
 
 /* ================= START SERVER ================= */
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+    console.log(`🚀 Server running on port ${PORT}`);
 });
