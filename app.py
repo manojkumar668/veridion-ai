@@ -8,6 +8,7 @@ import random
 import smtplib
 import os
 import time
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
@@ -49,56 +50,50 @@ print("📧 EMAIL:", EMAIL)
 print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
-import requests
-
 def send_otp_email(to_email, otp):
 
     try:
 
-        url = "https://api.brevo.com/v3/smtp/email"
+        msg = MIMEMultipart()
 
-        headers = {
-            "accept": "application/json",
-            "api-key": APP_PASSWORD,
-            "content-type": "application/json"
-        }
+        msg["From"] = EMAIL
+        msg["To"] = to_email
+        msg["Subject"] = "Veridion AI OTP"
 
-        payload = {
-            "sender": {
-                "name": "Veridion AI",
-                "email": "ab51a3001@smtp-brevo.com"
-            },
-            "to": [
-                {
-                    "email": to_email
-                }
-            ],
-            "subject": "Veridion AI OTP",
-            "htmlContent": f"""
-            <h2>Your OTP is: {otp}</h2>
-            <p>Valid for 5 minutes.</p>
-            """
-        }
+        body = f"""
+Your OTP is: {otp}
 
-        response = requests.post(
-            url,
-            json=payload,
-            headers=headers,
-            timeout=20
+Valid for 5 minutes.
+"""
+
+        msg.attach(MIMEText(body, "plain"))
+
+        server = smtplib.SMTP_SSL(
+            "smtp-relay.brevo.com",
+            465,
+            timeout=30
         )
 
-        print("BREVO STATUS:", response.status_code)
-        print("BREVO RESPONSE:", response.text)
+        server.login(EMAIL, APP_PASSWORD)
 
-        if response.status_code == 201:
-            print("✅ OTP SENT SUCCESSFULLY")
-            return True
+        server.sendmail(
+            EMAIL,
+            to_email,
+            msg.as_string()
+        )
 
-        return False
+        server.quit()
+
+        print("✅ OTP SENT SUCCESSFULLY")
+
+        return True
 
     except Exception as e:
-        print("❌ EMAIL ERROR:", e)
+
+        print("❌ EMAIL ERROR:", str(e))
+
         return False
+
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
 @limiter.limit("5 per minute")
@@ -109,6 +104,7 @@ def send_otp():
     email = data.get("email", "").strip().lower()
 
     if not email:
+
         return jsonify({
             "success": False,
             "message": "Email required"
@@ -135,9 +131,11 @@ def send_otp():
         "used": False
     }
 
-    sent = send_otp_email(email, otp)
+    # ================= SEND EMAIL =================
+    email_sent = send_otp_email(email, otp)
 
-    if not sent:
+    if not email_sent:
+
         return jsonify({
             "success": False,
             "message": "Failed to send OTP"
@@ -160,11 +158,13 @@ def verify_otp():
     record = otp_store.get(email)
 
     if not record:
+
         return jsonify({
             "success": False,
             "message": "OTP not found"
         })
 
+    # ================= OTP EXPIRY =================
     if time.time() - record["time"] > OTP_EXPIRY:
 
         otp_store.pop(email, None)
@@ -174,6 +174,7 @@ def verify_otp():
             "message": "OTP expired"
         })
 
+    # ================= OTP USED =================
     if record["used"]:
 
         return jsonify({
@@ -181,6 +182,7 @@ def verify_otp():
             "message": "OTP already used"
         })
 
+    # ================= VERIFY =================
     if record["otp"] == otp:
 
         otp_store[email]["used"] = True
@@ -251,6 +253,7 @@ def otp():
 def chat():
 
     if "user" not in session:
+
         return redirect(url_for("login"))
 
     return render_template("chat.html")
