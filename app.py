@@ -13,23 +13,18 @@ import threading
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
-# ================= BASE DIR =================
+# ================= BASE =================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ================= ENV LOAD =================
 dotenv_path = os.path.join(BASE_DIR, ".env")
 load_dotenv(dotenv_path=dotenv_path)
 
 # ================= APP =================
-app = Flask(
-    __name__,
-    template_folder=os.path.join(BASE_DIR, "templates")
-)
-
+app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
 app.secret_key = "veridion_secret_key"
 CORS(app)
 
-# ================= RATE LIMITER =================
+# ================= RATE LIMIT =================
 limiter = Limiter(
     get_remote_address,
     app=app,
@@ -38,7 +33,6 @@ limiter = Limiter(
 
 # ================= OTP STORE =================
 otp_store = {}
-
 OTP_EXPIRY = 300
 OTP_COOLDOWN = 30
 
@@ -53,16 +47,14 @@ print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 def send_otp_email(to_email, otp):
 
     try:
+        print("📨 Sending OTP...")
+
         msg = MIMEMultipart()
         msg["From"] = EMAIL
         msg["To"] = to_email
         msg["Subject"] = "Veridion AI OTP"
 
-        body = f"""
-Your OTP is: {otp}
-
-Valid for 5 minutes.
-"""
+        body = f"Your OTP is: {otp}\nValid for 5 minutes."
         msg.attach(MIMEText(body, "plain"))
 
         server = smtplib.SMTP_SSL(
@@ -71,17 +63,8 @@ Valid for 5 minutes.
             timeout=10
         )
 
-        server.set_debuglevel(0)
-        server.ehlo()
-
         server.login(EMAIL, APP_PASSWORD)
-
-        server.sendmail(
-            EMAIL,
-            to_email,
-            msg.as_string()
-        )
-
+        server.sendmail(EMAIL, to_email, msg.as_string())
         server.quit()
 
         print("✅ OTP SENT SUCCESSFULLY")
@@ -111,8 +94,7 @@ def send_otp():
     now = time.time()
 
     if email in otp_store:
-        last = otp_store[email].get("time", 0)
-        if now - last < OTP_COOLDOWN:
+        if now - otp_store[email]["time"] < OTP_COOLDOWN:
             return jsonify({
                 "success": False,
                 "message": "Wait before requesting new OTP"
@@ -126,15 +108,8 @@ def send_otp():
         "used": False
     }
 
-    # ✅ NON-BLOCKING EMAIL (IMPORTANT FIX)
-    try:
-        threading.Thread(target=async_send, args=(email, otp)).start()
-    except Exception as e:
-        print("THREAD ERROR:", e)
-        return jsonify({
-            "success": False,
-            "message": "Email service error"
-        })
+    # ✅ NON-BLOCKING EMAIL (IMPORTANT)
+    threading.Thread(target=async_send, args=(email, otp)).start()
 
     return jsonify({"success": True})
 
@@ -230,5 +205,5 @@ def health():
 
 # ================= RUN =================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
