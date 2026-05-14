@@ -45,23 +45,22 @@ print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 # ================= EMAIL SENDER =================
 def send_otp_email(to_email, otp):
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=10)
+        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=10)
 
         server.starttls()
 
         server.login(EMAIL, APP_PASSWORD)
 
-        msg = f"Subject: Veridion OTP\n\nYour OTP is: {otp}"
+        msg = f"Subject: Veridion AI OTP\n\nYour OTP is: {otp}"
 
         server.sendmail(EMAIL, to_email, msg)
 
         server.quit()
 
-        print("✅ OTP SENT")
+        print("✅ OTP SENT SUCCESSFULLY")
 
     except Exception as e:
         print("❌ EMAIL ERROR:", e)
-
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
 @limiter.limit("5 per minute")
