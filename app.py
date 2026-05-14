@@ -8,6 +8,7 @@ import random
 import smtplib
 import os
 import time
+import threading
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -26,7 +27,6 @@ app = Flask(
 )
 
 app.secret_key = "veridion_secret_key"
-
 CORS(app)
 
 # ================= RATE LIMITER =================
@@ -50,48 +50,52 @@ print("📧 EMAIL:", EMAIL)
 print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
-# ================= EMAIL SENDER =================
-# ================= EMAIL SENDER =================
-import requests
-
 def send_otp_email(to_email, otp):
 
     try:
-        url = "https://api.brevo.com/v3/smtp/email"
+        msg = MIMEMultipart()
+        msg["From"] = EMAIL
+        msg["To"] = to_email
+        msg["Subject"] = "Veridion AI OTP"
 
-        headers = {
-            "accept": "application/json",
-            "api-key": os.getenv("BREVO_API_KEY"),
-            "content-type": "application/json"
-        }
+        body = f"""
+Your OTP is: {otp}
 
-        payload = {
-            "sender": {
-                "name": "Veridion AI",
-                "email": EMAIL
-            },
-            "to": [
-                {
-                    "email": to_email
-                }
-            ],
-            "subject": "Veridion AI OTP",
-            "htmlContent": f"""
-                <h2>Your OTP is: {otp}</h2>
-                <p>Valid for 5 minutes.</p>
-            """
-        }
+Valid for 5 minutes.
+"""
+        msg.attach(MIMEText(body, "plain"))
 
-        response = requests.post(url, json=payload, headers=headers, timeout=20)
+        server = smtplib.SMTP_SSL(
+            "smtp-relay.brevo.com",
+            465,
+            timeout=10
+        )
 
-        print("BREVO STATUS:", response.status_code)
-        print("BREVO RESPONSE:", response.text)
+        server.set_debuglevel(0)
+        server.ehlo()
 
-        return response.status_code == 201
+        server.login(EMAIL, APP_PASSWORD)
+
+        server.sendmail(
+            EMAIL,
+            to_email,
+            msg.as_string()
+        )
+
+        server.quit()
+
+        print("✅ OTP SENT SUCCESSFULLY")
+        return True
 
     except Exception as e:
-        print("❌ EMAIL ERROR:", e)
+        print("❌ EMAIL ERROR:", str(e))
         return False
+
+
+# ================= ASYNC EMAIL =================
+def async_send(email, otp):
+    send_otp_email(email, otp)
+
 
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
@@ -99,24 +103,16 @@ def send_otp_email(to_email, otp):
 def send_otp():
 
     data = request.json
-
     email = data.get("email", "").strip().lower()
 
     if not email:
-
-        return jsonify({
-            "success": False,
-            "message": "Email required"
-        })
+        return jsonify({"success": False, "message": "Email required"})
 
     now = time.time()
 
     if email in otp_store:
-
         last = otp_store[email].get("time", 0)
-
         if now - last < OTP_COOLDOWN:
-
             return jsonify({
                 "success": False,
                 "message": "Wait before requesting new OTP"
@@ -130,72 +126,46 @@ def send_otp():
         "used": False
     }
 
-    # ================= SEND EMAIL =================
-    sent = send_otp_email(email, otp)
-
-    if not sent:
-
+    # ✅ NON-BLOCKING EMAIL (IMPORTANT FIX)
+    try:
+        threading.Thread(target=async_send, args=(email, otp)).start()
+    except Exception as e:
+        print("THREAD ERROR:", e)
         return jsonify({
             "success": False,
-            "message": "Failed to send OTP"
+            "message": "Email service error"
         })
 
-    return jsonify({
-        "success": True
-    })
+    return jsonify({"success": True})
+
 
 # ================= VERIFY OTP =================
 @app.route("/verify-otp", methods=["POST"])
 def verify_otp():
 
     data = request.json
-
     email = data.get("email", "").strip().lower()
-
     otp = data.get("otp", "").strip()
 
     record = otp_store.get(email)
 
     if not record:
+        return jsonify({"success": False, "message": "OTP not found"})
 
-        return jsonify({
-            "success": False,
-            "message": "OTP not found"
-        })
-
-    # ================= OTP EXPIRY =================
     if time.time() - record["time"] > OTP_EXPIRY:
-
         otp_store.pop(email, None)
+        return jsonify({"success": False, "message": "OTP expired"})
 
-        return jsonify({
-            "success": False,
-            "message": "OTP expired"
-        })
-
-    # ================= OTP USED =================
     if record["used"]:
+        return jsonify({"success": False, "message": "OTP already used"})
 
-        return jsonify({
-            "success": False,
-            "message": "OTP already used"
-        })
-
-    # ================= VERIFY =================
     if record["otp"] == otp:
-
         otp_store[email]["used"] = True
-
         session["user"] = email
+        return jsonify({"success": True})
 
-        return jsonify({
-            "success": True
-        })
+    return jsonify({"success": False, "message": "Invalid OTP"})
 
-    return jsonify({
-        "success": False,
-        "message": "Invalid OTP"
-    })
 
 # ================= PREDICT =================
 @app.route("/predict", methods=["POST"])
@@ -203,16 +173,9 @@ def predict():
 
     text = request.json.get("text", "").lower()
 
-    scam_keywords = [
-        "win",
-        "lottery",
-        "free",
-        "money",
-        "prize"
-    ]
+    scam_keywords = ["win", "lottery", "free", "money", "prize"]
 
     if any(word in text for word in scam_keywords):
-
         return jsonify({
             "prediction": "FAKE",
             "confidence": "92%",
@@ -237,47 +200,35 @@ def predict():
         ]
     })
 
+
 # ================= ROUTES =================
 @app.route("/")
 def login():
-
     return render_template("login.html")
 
 @app.route("/otp")
-def otp():
-
+def otp_page():
     return render_template("otp.html")
 
 @app.route("/chat")
 def chat():
-
     if "user" not in session:
-
         return redirect(url_for("login"))
-
     return render_template("chat.html")
 
 @app.route("/logout")
 def logout():
-
     session.clear()
-
     return redirect(url_for("login"))
 
-# ================= HEALTH CHECK =================
+
+# ================= HEALTH =================
 @app.route("/health")
 def health():
+    return jsonify({"status": "running"})
 
-    return jsonify({
-        "status": "running"
-    })
 
 # ================= RUN =================
 if __name__ == "__main__":
-
     port = int(os.environ.get("PORT", 10000))
-
-    app.run(
-        host="0.0.0.0",
-        port=port
-    )
+    app.run(host="0.0.0.0", port=port)
