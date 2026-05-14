@@ -50,6 +50,7 @@ print("📧 EMAIL:", EMAIL)
 print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
+# ================= EMAIL SENDER =================
 def send_otp_email(to_email, otp):
 
     try:
@@ -132,9 +133,9 @@ def send_otp():
     }
 
     # ================= SEND EMAIL =================
-    email_sent = send_otp_email(email, otp)
+    sent = send_otp_email(email, otp)
 
-    if not email_sent:
+    if not sent:
 
         return jsonify({
             "success": False,
