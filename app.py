@@ -51,9 +51,14 @@ print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
 # ================= EMAIL SENDER =================
+# ================= EMAIL SENDER =================
 def send_otp_email(to_email, otp):
 
     try:
+
+        print("📨 TRYING TO SEND OTP...")
+        print("📧 FROM:", EMAIL)
+        print("📩 TO:", to_email)
 
         msg = MIMEMultipart()
 
@@ -69,13 +74,23 @@ Valid for 5 minutes.
 
         msg.attach(MIMEText(body, "plain"))
 
+        print("🔌 CONNECTING TO BREVO SMTP...")
+
         server = smtplib.SMTP_SSL(
             "smtp-relay.brevo.com",
             465,
             timeout=30
         )
 
+        print("✅ CONNECTED")
+
+        print("🔐 LOGGING IN...")
+
         server.login(EMAIL, APP_PASSWORD)
+
+        print("✅ LOGIN SUCCESS")
+
+        print("📤 SENDING EMAIL...")
 
         server.sendmail(
             EMAIL,
@@ -83,15 +98,16 @@ Valid for 5 minutes.
             msg.as_string()
         )
 
-        server.quit()
+        print("✅ EMAIL SENT")
 
-        print("✅ OTP SENT SUCCESSFULLY")
+        server.quit()
 
         return True
 
     except Exception as e:
 
-        print("❌ EMAIL ERROR:", str(e))
+        print("❌ EMAIL ERROR:")
+        print(str(e))
 
         return False
 
