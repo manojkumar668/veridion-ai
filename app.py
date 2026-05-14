@@ -49,35 +49,56 @@ print("📧 EMAIL:", EMAIL)
 print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
+import requests
+
 def send_otp_email(to_email, otp):
+
     try:
-        server = smtplib.SMTP_SSL(
-            "smtp-relay.brevo.com",
-            465,
+
+        url = "https://api.brevo.com/v3/smtp/email"
+
+        headers = {
+            "accept": "application/json",
+            "api-key": APP_PASSWORD,
+            "content-type": "application/json"
+        }
+
+        payload = {
+            "sender": {
+                "name": "Veridion AI",
+                "email": "ab51a3001@smtp-brevo.com"
+            },
+            "to": [
+                {
+                    "email": to_email
+                }
+            ],
+            "subject": "Veridion AI OTP",
+            "htmlContent": f"""
+            <h2>Your OTP is: {otp}</h2>
+            <p>Valid for 5 minutes.</p>
+            """
+        }
+
+        response = requests.post(
+            url,
+            json=payload,
+            headers=headers,
             timeout=20
         )
 
-        server.login(EMAIL, APP_PASSWORD)
+        print("BREVO STATUS:", response.status_code)
+        print("BREVO RESPONSE:", response.text)
 
-        msg = f"""Subject: Veridion AI OTP
+        if response.status_code == 201:
+            print("✅ OTP SENT SUCCESSFULLY")
+            return True
 
-Your OTP is: {otp}
-
-Valid for 5 minutes.
-"""
-
-        server.sendmail(EMAIL, to_email, msg)
-
-        server.quit()
-
-        print("✅ OTP SENT SUCCESSFULLY")
-
-        return True
+        return False
 
     except Exception as e:
         print("❌ EMAIL ERROR:", e)
         return False
-
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
 @limiter.limit("5 per minute")
