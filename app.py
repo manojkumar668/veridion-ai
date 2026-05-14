@@ -4,11 +4,11 @@ from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from dotenv import load_dotenv
 
-import random
-import smtplib
 import os
 import time
+import random
 import threading
+import smtplib
 
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -25,7 +25,7 @@ app.secret_key = "veridion_secret_key"
 CORS(app)
 
 # ================= RATE LIMIT =================
-limiter = Limiter(
+Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per day", "50 per hour"]
@@ -40,12 +40,11 @@ OTP_COOLDOWN = 30
 EMAIL = os.getenv("EMAIL_USER")
 APP_PASSWORD = os.getenv("EMAIL_PASS")
 
-print("📧 EMAIL:", EMAIL)
-print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
+print("📧 SMTP EMAIL:", EMAIL)
+print("🔐 SMTP PASS LOADED:", bool(APP_PASSWORD))
 
-# ================= EMAIL SENDER =================
+# ================= FINAL SMTP FUNCTION =================
 def send_otp_email(to_email, otp):
-
     try:
         print("📨 Sending OTP...")
 
@@ -57,14 +56,16 @@ def send_otp_email(to_email, otp):
         body = f"Your OTP is: {otp}\nValid for 5 minutes."
         msg.attach(MIMEText(body, "plain"))
 
-        server = smtplib.SMTP_SSL(
-            "smtp-relay.brevo.com",
-            465,
-            timeout=10
-        )
+        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15)
+        server.ehlo()
+        server.starttls()
+        server.ehlo()
+
+        print("🔌 Connecting to SMTP...")
 
         server.login(EMAIL, APP_PASSWORD)
         server.sendmail(EMAIL, to_email, msg.as_string())
+
         server.quit()
 
         print("✅ OTP SENT SUCCESSFULLY")
@@ -82,9 +83,7 @@ def async_send(email, otp):
 
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
-@limiter.limit("5 per minute")
 def send_otp():
-
     data = request.json
     email = data.get("email", "").strip().lower()
 
@@ -95,10 +94,7 @@ def send_otp():
 
     if email in otp_store:
         if now - otp_store[email]["time"] < OTP_COOLDOWN:
-            return jsonify({
-                "success": False,
-                "message": "Wait before requesting new OTP"
-            })
+            return jsonify({"success": False, "message": "Wait before requesting OTP"})
 
     otp = str(random.randint(100000, 999999))
 
@@ -108,7 +104,7 @@ def send_otp():
         "used": False
     }
 
-    # ✅ NON-BLOCKING EMAIL (IMPORTANT)
+    # ✅ async send
     threading.Thread(target=async_send, args=(email, otp)).start()
 
     return jsonify({"success": True})
@@ -117,7 +113,6 @@ def send_otp():
 # ================= VERIFY OTP =================
 @app.route("/verify-otp", methods=["POST"])
 def verify_otp():
-
     data = request.json
     email = data.get("email", "").strip().lower()
     otp = data.get("otp", "").strip()
@@ -145,7 +140,6 @@ def verify_otp():
 # ================= PREDICT =================
 @app.route("/predict", methods=["POST"])
 def predict():
-
     text = request.json.get("text", "").lower()
 
     scam_keywords = ["win", "lottery", "free", "money", "prize"]
