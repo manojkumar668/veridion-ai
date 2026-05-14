@@ -167,7 +167,7 @@ def otp():
 def chat():
     if "user" not in session:
         return redirect(url_for("login"))
-    return render_template("index.html")
+    return render_template("chat.html")
 
 
 @app.route("/logout")
