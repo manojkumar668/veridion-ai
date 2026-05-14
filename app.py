@@ -50,39 +50,23 @@ print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 
 # ================= EMAIL SENDER =================
 def send_otp_email(to_email, otp):
-
     try:
-        sender_email = EMAIL
-        sender_password = APP_PASSWORD
-
-        message = MIMEMultipart()
-
-        message["From"] = sender_email
-        message["To"] = to_email
-        message["Subject"] = "Veridion AI OTP"
-
-        body = f"Your OTP is: {otp}"
-
-        message.attach(MIMEText(body, "plain"))
-
-        server = smtplib.SMTP(
+        server = smtplib.SMTP_SSL(
             "smtp-relay.brevo.com",
-            587,
-            timeout=30
+            465,
+            timeout=20
         )
 
-        server.starttls()
+        server.login(EMAIL, APP_PASSWORD)
 
-        server.login(
-            sender_email,
-            sender_password
-        )
+        msg = f"""Subject: Veridion AI OTP
 
-        server.sendmail(
-            sender_email,
-            to_email,
-            message.as_string()
-        )
+Your OTP is: {otp}
+
+Valid for 5 minutes.
+"""
+
+        server.sendmail(EMAIL, to_email, msg)
 
         server.quit()
 
@@ -91,9 +75,7 @@ def send_otp_email(to_email, otp):
         return True
 
     except Exception as e:
-
         print("❌ EMAIL ERROR:", e)
-
         return False
 
 # ================= SEND OTP =================
