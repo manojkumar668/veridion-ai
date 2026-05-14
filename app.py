@@ -56,8 +56,7 @@ def send_otp_email(to_email, otp):
         body = f"Your OTP is: {otp}\nValid for 5 minutes."
         msg.attach(MIMEText(body, "plain"))
 
-        # ✅ STABLE BREVO CONFIG
-        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=20)
+        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=30)
         server.ehlo()
         server.starttls()
         server.ehlo()
@@ -72,7 +71,6 @@ def send_otp_email(to_email, otp):
     except Exception as e:
         print("❌ EMAIL ERROR:", str(e))
         return False
-
 
 # ================= ASYNC EMAIL =================
 def async_send(email, otp):
