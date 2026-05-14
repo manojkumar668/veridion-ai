@@ -25,7 +25,7 @@ app.secret_key = "veridion_secret_key"
 CORS(app)
 
 # ================= RATE LIMIT =================
-Limiter(
+limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["200 per day", "50 per hour"]
@@ -37,13 +37,13 @@ OTP_EXPIRY = 300
 OTP_COOLDOWN = 30
 
 # ================= EMAIL CONFIG =================
-EMAIL = os.getenv("EMAIL_USER")
-APP_PASSWORD = os.getenv("EMAIL_PASS")
+EMAIL = os.getenv("SMTP_LOGIN")
+APP_PASSWORD = os.getenv("SMTP_KEY")
 
 print("📧 SMTP EMAIL:", EMAIL)
 print("🔐 SMTP PASS LOADED:", bool(APP_PASSWORD))
 
-# ================= FINAL SMTP FUNCTION =================
+# ================= EMAIL FUNCTION (FINAL FIX) =================
 def send_otp_email(to_email, otp):
     try:
         print("📨 Sending OTP...")
@@ -56,16 +56,14 @@ def send_otp_email(to_email, otp):
         body = f"Your OTP is: {otp}\nValid for 5 minutes."
         msg.attach(MIMEText(body, "plain"))
 
-        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=15)
+        # ✅ STABLE BREVO CONFIG
+        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=20)
         server.ehlo()
         server.starttls()
         server.ehlo()
 
-        print("🔌 Connecting to SMTP...")
-
         server.login(EMAIL, APP_PASSWORD)
         server.sendmail(EMAIL, to_email, msg.as_string())
-
         server.quit()
 
         print("✅ OTP SENT SUCCESSFULLY")
@@ -83,6 +81,7 @@ def async_send(email, otp):
 
 # ================= SEND OTP =================
 @app.route("/send-otp", methods=["POST"])
+@limiter.limit("5 per minute")
 def send_otp():
     data = request.json
     email = data.get("email", "").strip().lower()
@@ -94,7 +93,10 @@ def send_otp():
 
     if email in otp_store:
         if now - otp_store[email]["time"] < OTP_COOLDOWN:
-            return jsonify({"success": False, "message": "Wait before requesting OTP"})
+            return jsonify({
+                "success": False,
+                "message": "Wait before requesting OTP"
+            })
 
     otp = str(random.randint(100000, 999999))
 
@@ -104,7 +106,6 @@ def send_otp():
         "used": False
     }
 
-    # ✅ async send
     threading.Thread(target=async_send, args=(email, otp)).start()
 
     return jsonify({"success": True})
