@@ -52,63 +52,45 @@ print("🔐 PASSWORD LOADED:", bool(APP_PASSWORD))
 # ================= EMAIL SENDER =================
 # ================= EMAIL SENDER =================
 # ================= EMAIL SENDER =================
+import requests
+
 def send_otp_email(to_email, otp):
 
     try:
+        url = "https://api.brevo.com/v3/smtp/email"
 
-        print("📨 TRYING TO SEND OTP...")
-        print("📧 FROM:", EMAIL)
-        print("📩 TO:", to_email)
+        headers = {
+            "accept": "application/json",
+            "api-key": os.getenv("BREVO_API_KEY"),
+            "content-type": "application/json"
+        }
 
-        msg = MIMEMultipart()
+        payload = {
+            "sender": {
+                "name": "Veridion AI",
+                "email": EMAIL
+            },
+            "to": [
+                {
+                    "email": to_email
+                }
+            ],
+            "subject": "Veridion AI OTP",
+            "htmlContent": f"""
+                <h2>Your OTP is: {otp}</h2>
+                <p>Valid for 5 minutes.</p>
+            """
+        }
 
-        msg["From"] = EMAIL
-        msg["To"] = to_email
-        msg["Subject"] = "Veridion AI OTP"
+        response = requests.post(url, json=payload, headers=headers, timeout=20)
 
-        body = f"""
-Your OTP is: {otp}
+        print("BREVO STATUS:", response.status_code)
+        print("BREVO RESPONSE:", response.text)
 
-Valid for 5 minutes.
-"""
-
-        msg.attach(MIMEText(body, "plain"))
-
-        print("🔌 CONNECTING TO BREVO SMTP...")
-
-        server = smtplib.SMTP_SSL(
-            "smtp-relay.brevo.com",
-            465,
-            timeout=30
-        )
-
-        print("✅ CONNECTED")
-
-        print("🔐 LOGGING IN...")
-
-        server.login(EMAIL, APP_PASSWORD)
-
-        print("✅ LOGIN SUCCESS")
-
-        print("📤 SENDING EMAIL...")
-
-        server.sendmail(
-            EMAIL,
-            to_email,
-            msg.as_string()
-        )
-
-        print("✅ EMAIL SENT")
-
-        server.quit()
-
-        return True
+        return response.status_code == 201
 
     except Exception as e:
-
-        print("❌ EMAIL ERROR:")
-        print(str(e))
-
+        print("❌ EMAIL ERROR:", e)
         return False
 
 # ================= SEND OTP =================
