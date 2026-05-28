@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Veridion AI - Authorization Gateway</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-canvas: #fafaff;
+            --card-bg: #ffffff;
+            --text-main: #0c111d;
+            --text-muted: #667085;
+            --accent-blue: #2970ff;
+            --border-ultra-soft: rgba(0, 0, 0, 0.04);
+            --input-border: rgba(0, 0, 0, 0.08);
+            --chromatic-glow: linear-gradient(90deg, #3a7bd5, #3a6073, #00d2ff, #92fe9d, #00c6ff, #0072ff, #3a7bd5);
+        }
+
+        [data-theme="dark"] {
+            --bg-canvas: #080b11;
+            --card-bg: #0d121f;
+            --text-main: #f5f7fa;
+            --text-muted: #8090a6;
+            --accent-blue: #00d2ff;
+            --border-ultra-soft: rgba(255, 255, 255, 0.03);
+            --input-border: rgba(255, 255, 255, 0.1);
+            --chromatic-glow: linear-gradient(90deg, #00f2fe, #4facfe, #00d2ff, #00f2fe, #92fe9d, #3a7bd5, #00f2fe);
+        }
+
+        * {
+            box-sizing: border-box;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            margin: 0;
+            padding: 0;
+            transition: background 0.3s ease, border-color 0.3s ease;
+        }
+
+        body {
+            display: flex;
+            min-height: 100vh;
+            background: var(--bg-canvas);
+            color: var(--text-main);
+            justify-content: center;
+            align-items: center;
+            padding: 24px;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: -10%;
+            left: 20%;
+            width: 60vw;
+            height: 60vh;
+            background: radial-gradient(circle, rgba(41, 112, 255, 0.06) 0%, transparent 60%);
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Floating Theme Selector Hub */
+        .theme-switcher-rack {
+            position: absolute;
+            top: 24px;
+            right: 24px;
+            z-index: 50;
+            background: var(--card-bg);
+            border: 1px solid var(--border-ultra-soft);
+            padding: 6px;
+            border-radius: 14px;
+            display: flex;
+            gap: 4px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02);
+        }
+
+        .theme-btn {
+            background: none;
+            border: none;
+            padding: 8px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            cursor: pointer;
+            border-radius: 10px;
+            transition: all 0.2s;
+        }
+
+        .theme-btn.active {
+            background: var(--text-main);
+            color: var(--card-bg);
+        }
+
+        .gateway-card {
+            position: relative;
+            z-index: 10;
+            width: 100%;
+            max-width: 440px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-ultra-soft);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.02);
+            animation: paneFadeIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        .gateway-card::after {
+            content: '';
+            position: absolute;
+            inset: -1px;
+            border-radius: 24px;
+            padding: 1px; 
+            background: rgba(0, 0, 0, 0.08);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            pointer-events: none;
+            transition: all 0.25s ease;
+        }
+
+        [data-theme="dark"] .gateway-card::after {
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .gateway-card:focus-within::after {
+            background: var(--chromatic-glow) !important;
+            background-size: 400% auto !important;
+            animation: chromaticFlow 4s linear infinite;
+        }
+
+        .brand-meta-group {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .brand-signature {
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: -1px;
+            background: var(--chromatic-glow);
+            background-size: 400% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: chromaticFlow 8s linear infinite;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .brand-subheading {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: var(--chromatic-glow);
+            background-size: 400% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: chromaticFlow 8s linear infinite reverse;
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .input-group label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .input-wrapper input {
+            width: 100%;
+            padding: 14px 18px;
+            border-radius: 14px;
+            border: 1px solid var(--input-border);
+            background: transparent;
+            color: var(--text-main);
+            font-size: 15px;
+            outline: none;
+        }
+
+        .input-wrapper input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 0 4px rgba(41, 112, 255, 0.1);
+        }
+
+        .action-submit-btn {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 14px;
+            background: var(--text-main);
+            color: var(--card-bg);
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-submit-btn:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        @keyframes paneFadeIn {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes chromaticFlow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 400% 50%; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="theme-switcher-rack">
+        <button class="theme-btn active" id="lightBtn" onclick="setTheme('light')">Light Studio</button>
+        <button class="theme-btn" id="darkBtn" onclick="setTheme('dark')">Cyber Neon</button>
+    </div>
+
+    <div class="gateway-card">
+        <div class="brand-meta-group">
+            <span class="brand-signature">Veridion AI</span>
+            <span class="brand-subheading">fake news & scam detector</span>
+        </div>
+
+        <div class="input-group">
+            <label>Operator Designation</label>
+            <div class="input-wrapper">
+                <input id="name" type="text" placeholder="Enter security identity name...">
+            </div>
+        </div>
+
+        <div class="input-group">
+            <label>Communication Endpoints</label>
+            <div class="input-wrapper">
+                <input id="email" type="email" placeholder="operator@veridion.ai">
+            </div>
+        </div>
+
+        <button class="action-submit-btn" onclick="login()">Initialize Workspace Console</button>
+    </div>
+
+    <script>
+        function setTheme(theme) {
+            document.documentElement.setAttribute('data-theme', theme);
+            localStorage.setItem('theme', theme);
+            document.getElementById('lightBtn').classList.toggle('active', theme === 'light');
+            document.getElementById('darkBtn').classList.toggle('active', theme === 'dark');
+        }
+
+        function login() {
+            let name = document.getElementById("name").value.trim();
+            let email = document.getElementById("email").value.trim();
+            if (!name || !email) {
+                alert("Clearance authorization fields missing.");
+                return;
+            }
+            localStorage.setItem("name", name);
+            localStorage.setItem("email", email);
+            window.location.href = "/chat";
+        }
+
+        // Keep state uniform across windows
+        if(localStorage.getItem('theme') === 'dark') setTheme('dark');
+    </script>
+</body>
+</html>

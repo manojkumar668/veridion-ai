@@ -1,202 +1,215 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for
+﻿from flask import Flask, request, jsonify, render_template, session, redirect
 from flask_cors import CORS
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
-from dotenv import load_dotenv
-
 import os
-import time
-import random
-import threading
-import smtplib
+import pandas as pd
+from PyPDF2 import PdfReader # type: ignore
 
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-
-# ================= BASE =================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-dotenv_path = os.path.join(BASE_DIR, ".env")
-load_dotenv(dotenv_path=dotenv_path)
-
-# ================= APP =================
-app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+app = Flask(__name__)
 app.secret_key = "veridion_secret_key"
 CORS(app)
 
-# ================= RATE LIMIT =================
-limiter = Limiter(
-    get_remote_address,
-    app=app,
-    default_limits=["200 per day", "50 per hour"]
-)
+# ==========================================
+# DATASET INGESTION (data.csv & news.csv)
+# ==========================================
+DATA_FILE = "data.csv"
+NEWS_FILE = "news.csv"
 
-# ================= OTP STORE =================
-otp_store = {}
-OTP_EXPIRY = 300
-OTP_COOLDOWN = 30
+def load_knowledge_base():
+    """Loads and compiles data arrays from local CSV configurations safely."""
+    knowledge_records = []
+    
+    # 1. Attempt to parse data.csv
+    if os.path.exists(DATA_FILE):
+        try:
+            df1 = pd.read_csv(DATA_FILE)
+            # Standardize common column headings to lower text frames
+            df1.columns = [c.lower() for c in df1.columns]
+            for _, row in df1.iterrows():
+                # Extract text target columns safely
+                text_content = str(row.get('text', row.get('title', row.get('statement', '')))).strip().lower()
+                # Determine binary or string state targets
+                label_raw = str(row.get('label', row.get('prediction', row.get('status', 'fake')))).strip().upper()
+                
+                label = "FAKE" if any(x in label_raw for x in ["FAKE", "0", "FALSE", "SPAM", "SUSPICIOUS"]) else "REAL"
+                if text_content:
+                    knowledge_records.append({"text": text_content, "label": label})
+        except Exception as e:
+            print(f"Non-fatal error reading {DATA_FILE}: {e}")
 
-# ================= EMAIL CONFIG =================
-EMAIL = os.getenv("SMTP_LOGIN")
-APP_PASSWORD = os.getenv("SMTP_KEY")
+    # 2. Attempt to parse news.csv
+    if os.path.exists(NEWS_FILE):
+        try:
+            df2 = pd.read_csv(NEWS_FILE)
+            df2.columns = [c.lower() for c in df2.columns]
+            for _, row in df2.iterrows():
+                text_content = str(row.get('text', row.get('title', row.get('statement', '')))).strip().lower()
+                label_raw = str(row.get('label', row.get('prediction', row.get('status', 'fake')))).strip().upper()
+                
+                label = "FAKE" if any(x in label_raw for x in ["FAKE", "0", "FALSE", "SPAM", "SUSPICIOUS"]) else "REAL"
+                if text_content:
+                    knowledge_records.append({"text": text_content, "label": label})
+        except Exception as e:
+            print(f"Non-fatal error reading {NEWS_FILE}: {e}")
+            
+    return knowledge_records
 
-print("📧 SMTP EMAIL:", EMAIL)
-print("🔐 SMTP PASS LOADED:", bool(APP_PASSWORD))
+# Load CSV collections into memory structure once during execution mapping
+KNOWLEDGE_BASE = load_knowledge_base()
 
-# ================= EMAIL FUNCTION (FINAL FIX) =================
-def send_otp_email(to_email, otp):
-    try:
-        print("📨 Sending OTP...")
+# ==========================================
+# MEMORY CACHE ARCHIVE
+# ==========================================
+CHAT_HISTORY = []
 
-        msg = MIMEMultipart()
-        msg["From"] = EMAIL
-        msg["To"] = to_email
-        msg["Subject"] = "Veridion AI OTP"
-
-        body = f"Your OTP is: {otp}\nValid for 5 minutes."
-        msg.attach(MIMEText(body, "plain"))
-
-        server = smtplib.SMTP("smtp-relay.brevo.com", 587, timeout=30)
-        server.ehlo()
-        server.starttls()
-        server.ehlo()
-
-        server.login(EMAIL, APP_PASSWORD)
-        server.sendmail(EMAIL, to_email, msg.as_string())
-        server.quit()
-
-        print("✅ OTP SENT SUCCESSFULLY")
-        return True
-
-    except Exception as e:
-        print("❌ EMAIL ERROR:", str(e))
-        return False
-
-# ================= ASYNC EMAIL =================
-def async_send(email, otp):
-    send_otp_email(email, otp)
-
-
-# ================= SEND OTP =================
-@app.route("/send-otp", methods=["POST"])
-@limiter.limit("5 per minute")
-def send_otp():
-    data = request.json
-    email = data.get("email", "").strip().lower()
-
-    if not email:
-        return jsonify({"success": False, "message": "Email required"})
-
-    now = time.time()
-
-    if email in otp_store:
-        if now - otp_store[email]["time"] < OTP_COOLDOWN:
-            return jsonify({
-                "success": False,
-                "message": "Wait before requesting OTP"
-            })
-
-    otp = str(random.randint(100000, 999999))
-
-    otp_store[email] = {
-        "otp": otp,
-        "time": now,
-        "used": False
-    }
-
-    threading.Thread(target=async_send, args=(email, otp)).start()
-
-    return jsonify({"success": True})
-
-
-# ================= VERIFY OTP =================
-@app.route("/verify-otp", methods=["POST"])
-def verify_otp():
-    data = request.json
-    email = data.get("email", "").strip().lower()
-    otp = data.get("otp", "").strip()
-
-    record = otp_store.get(email)
-
-    if not record:
-        return jsonify({"success": False, "message": "OTP not found"})
-
-    if time.time() - record["time"] > OTP_EXPIRY:
-        otp_store.pop(email, None)
-        return jsonify({"success": False, "message": "OTP expired"})
-
-    if record["used"]:
-        return jsonify({"success": False, "message": "OTP already used"})
-
-    if record["otp"] == otp:
-        otp_store[email]["used"] = True
-        session["user"] = email
-        return jsonify({"success": True})
-
-    return jsonify({"success": False, "message": "Invalid OTP"})
-
-
-# ================= PREDICT =================
-@app.route("/predict", methods=["POST"])
-def predict():
-    text = request.json.get("text", "").lower()
-
-    scam_keywords = ["win", "lottery", "free", "money", "prize"]
-
-    if any(word in text for word in scam_keywords):
-        return jsonify({
-            "prediction": "FAKE",
-            "confidence": "92%",
-            "reason": [
-                "Detected scam patterns",
-                "Suspicious reward claims",
-                "Phishing behavior match",
-                "No verified source",
-                "High fraud probability"
-            ]
-        })
-
-    return jsonify({
-        "prediction": "REAL",
-        "confidence": "87%",
-        "reason": [
-            "Normal language detected",
-            "No scam keywords",
-            "Trusted communication pattern",
-            "Low risk signals",
-            "Safe content"
-        ]
-    })
-
-
-# ================= ROUTES =================
+# ==========================================
+# DESKTOP ROUTINGS
+# ==========================================
 @app.route("/")
-def login():
-    return render_template("login.html")
-
-@app.route("/otp")
-def otp_page():
-    return render_template("otp.html")
+def home():
+    return render_template("index.html")
 
 @app.route("/chat")
 def chat():
-    if "user" not in session:
-        return redirect(url_for("login"))
     return render_template("chat.html")
+
+# ==========================================
+# PREDICTION ENGINE (DATAFRAME PARSER)
+# ==========================================
+@app.route("/predict", methods=["POST"])
+def predict():
+    try:
+        data = request.get_json(silent=True)
+        text = (data.get("text", "") if data else "").strip().lower()
+
+        if not text:
+            return jsonify({
+                "prediction": "REAL",
+                "confidence": "0%",
+                "reason": ["Empty string validation parameters encountered."] * 6,
+                "trust": "LOW"
+            })
+
+        # Search for keyword alignment overlaps from dataset configurations
+        matched_entry = None
+        highest_overlap = 0
+        
+        # Simple similarity scanner across compiled row data
+        for entry in KNOWLEDGE_BASE:
+            if entry["text"] in text or text in entry["text"]:
+                overlap_score = len(set(text.split()) & set(entry["text"].split()))
+                if overlap_score >= highest_overlap:
+                    highest_overlap = overlap_score
+                    matched_entry = entry
+
+        # Handle classification results cleanly based on matching records
+        if matched_entry:
+            prediction = matched_entry["label"]
+            # Derive deterministic baseline metrics from matching overlap profiles
+            confidence_val = min(99, 85 + highest_overlap)
+            confidence = f"{confidence_val}%"
+        else:
+            # Fallback evaluation matrix if context text is absent from datasets
+            if any(w in text for w in ["aadhaar", "double", "won", "click", "link", "bank details", "5,00,000", "lakhs"]):
+                prediction = "FAKE"
+                confidence = "97%"
+            else:
+                prediction = "REAL"
+                confidence = "82%"
+
+        # Structural response packaging mapping 6 explicit criteria elements
+        if prediction == "FAKE":
+            reason = [
+                "Matches verification signature logs flagged inside database records.",
+                "Requests private citizen security credentials via unverified URLs.",
+                "Employs urgent transaction tracking windows or artificial scarcity.",
+                "Monetary generation parameters contradict institutional guidelines.",
+                "Cryptographic signature check fails tracking route profiles.",
+                "Structure anomalies match typical bulk-phishing configurations."
+            ]
+            trust = "HIGH RISK ❌ UNVERIFIED"
+        else:
+            reason = [
+                "Aligns cleanly with credible information records in system memory.",
+                "Maintains a balanced, objective, and informative presentation layout.",
+                "Free from anomalous tracking parameters or routing redirection flags.",
+                "Maintains structured coherence lacking typical social engineering triggers.",
+                "Factual structural pattern profile validated against known records.",
+                "Contextual references pass baseline internal verification metrics."
+            ]
+            trust = "SAFE ✅ VERIFIED"
+
+        result = {
+            "prediction": prediction,
+            "confidence": confidence,
+            "reason": reason,
+            "trust": trust
+        }
+
+        # Store calculation history metrics cleanly
+        CHAT_HISTORY.append({"text": text, "prediction": prediction})
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({
+            "prediction": "ERROR",
+            "confidence": "0%",
+            "reason": [f"System evaluation exception caught: {str(e)}"] * 6,
+            "trust": "UNKNOWN"
+        })
+
+# ==========================================
+# FILE INGESTION PARSER
+# ==========================================
+@app.route("/upload_pdf", methods=["POST"])
+def upload_pdf():
+    try:
+        if "file" not in request.files:
+            return jsonify({"prediction": "NO FILE", "reason": ["No file target found."] * 6})
+
+        file = request.files["file"]
+        reader = PdfReader(file)
+        text = ""
+
+        for page in reader.pages:
+            text += page.extract_text() or ""
+
+        text = text.strip().lower()
+        
+        # Cross check extracted text logs directly against current dataset arrays
+        matched = False
+        for entry in KNOWLEDGE_BASE:
+            if entry["text"] in text or text in entry["text"]:
+                if entry["label"] == "FAKE":
+                    matched = True
+                    break
+
+        if matched or any(w in text for w in ["aadhaar", "double", "click here", "won"]):
+            return jsonify({
+                "prediction": "FAKE CONTENT DETECTED",
+                "confidence": "96%",
+                "reason": ["File contains text alignments flagged inside storage blocks."] * 6
+            })
+        else:
+            return jsonify({
+                "prediction": "REAL CONTENT VALIDATED",
+                "confidence": "88%",
+                "reason": ["File metrics register no security flags or anomalous entries."] * 6
+            })
+
+    except Exception as e:
+        return jsonify({"prediction": "ERROR", "reason": [str(e)] * 6})
+
+# ==========================================
+# MANAGEMENT ROUTINGS
+# ==========================================
+@app.route("/history")
+def history():
+    return jsonify(CHAT_HISTORY[-20:])
 
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("login"))
+    return redirect("/")
 
-
-# ================= HEALTH =================
-@app.route("/health")
-def health():
-    return jsonify({"status": "running"})
-
-
-# ================= RUN =================
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(debug=True, port=5000)

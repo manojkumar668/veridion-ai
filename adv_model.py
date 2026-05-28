@@ -22,7 +22,7 @@ def predict_text(text):
     pred = model.predict(vec)[0]
     prob = model.predict_proba(vec)[0]
 
-    confidence = round(max(prob) * 100, 2)
+    confidence = float(round(max(prob) * 100, 2))
 
     if int(pred) == 1:
         return {
