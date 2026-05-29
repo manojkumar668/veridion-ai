@@ -17,12 +17,13 @@ from PyPDF2 import PdfReader
 from difflib import SequenceMatcher
 
 # =========================================================
-# FLASK SETUP
+# FLASK APP
 # =========================================================
 
 app = Flask(
     __name__,
-    template_folder="templates"
+    template_folder="templates",
+    static_folder="static"
 )
 
 app.secret_key = "veridion_secret_key"
@@ -30,7 +31,7 @@ app.secret_key = "veridion_secret_key"
 CORS(app)
 
 # =========================================================
-# DATASET FILES
+# FILES
 # =========================================================
 
 DATA_FILE = "data.csv"
@@ -44,10 +45,10 @@ def clean_text(text):
 
     text = str(text).lower()
 
-    # Remove URLs
+    # remove urls
     text = re.sub(r"http\S+", "", text)
 
-    # Remove special characters
+    # remove special chars
     text = re.sub(
         r"[^a-zA-Z0-9\s]",
         "",
@@ -57,7 +58,7 @@ def clean_text(text):
     return text.strip()
 
 # =========================================================
-# LOAD KNOWLEDGE BASE
+# LOAD DATASET
 # =========================================================
 
 def load_knowledge_base():
@@ -91,43 +92,40 @@ def load_knowledge_base():
                         or "fake"
                     ).upper()
 
-                    label = (
-                        "FAKE"
-                        if any(
-                            x in label_raw
-                            for x in [
-                                "FAKE",
-                                "FALSE",
-                                "0",
-                                "SPAM"
-                            ]
-                        )
-                        else "REAL"
-                    )
+                    if any(
+                        x in label_raw
+                        for x in [
+                            "FAKE",
+                            "FALSE",
+                            "0",
+                            "SPAM"
+                        ]
+                    ):
+                        label = "FAKE"
+                    else:
+                        label = "REAL"
 
                     cleaned = clean_text(text)
 
                     if cleaned:
 
                         records.append({
+
                             "text": cleaned,
                             "label": label
+
                         })
 
             except Exception as e:
 
-                print(
-                    f"Error loading {file}: {e}"
-                )
+                print(f"ERROR loading {file}: {e}")
 
-    print(
-        f"Loaded {len(records)} records into knowledge base."
-    )
+    print(f"Loaded {len(records)} records")
 
     return records
 
 # =========================================================
-# LOAD DATA
+# GLOBALS
 # =========================================================
 
 KNOWLEDGE_BASE = load_knowledge_base()
@@ -144,32 +142,21 @@ SCAM_KEYWORDS = [
     "bank",
     "upi",
     "verify",
-    "click here",
     "urgent",
     "lottery",
-    "prize",
     "winner",
-    "congratulations",
     "password",
     "aadhaar",
-    "account blocked",
-    "suspended",
     "claim now",
-    "limited time",
-    "free money",
     "bitcoin",
-    "payment failed",
     "refund",
-    "login immediately",
     "security alert",
-    "gift card",
-    "wire transfer",
-    "investment guaranteed",
-    "act now",
     "pay now",
-    "confirm identity",
     "kyc update",
-    "transaction failed"
+    "transaction failed",
+    "click here",
+    "login immediately",
+    "free money"
 
 ]
 
@@ -189,7 +176,7 @@ SUSPICIOUS_DOMAINS = [
 ]
 
 # =========================================================
-# TEXT SIMILARITY
+# SIMILARITY FUNCTION
 # =========================================================
 
 def similarity(a, b):
@@ -201,7 +188,7 @@ def similarity(a, b):
     ).ratio()
 
 # =========================================================
-# MAIN AI ANALYSIS ENGINE
+# ANALYZE TEXT
 # =========================================================
 
 def analyze_text(text):
@@ -215,7 +202,7 @@ def analyze_text(text):
     scam_score = 0
 
     # =====================================================
-    # KEYWORD DETECTION
+    # KEYWORD CHECK
     # =====================================================
 
     keyword_hits = []
@@ -225,18 +212,17 @@ def analyze_text(text):
         if keyword in text:
 
             scam_score += 10
-
             keyword_hits.append(keyword)
 
     if keyword_hits:
 
         reasons.append(
-            f"Suspicious keywords detected: "
-            f"{', '.join(keyword_hits[:6])}"
+            "Suspicious keywords: "
+            + ", ".join(keyword_hits[:5])
         )
 
     # =====================================================
-    # URL DETECTION
+    # URL CHECK
     # =====================================================
 
     urls = re.findall(
@@ -249,7 +235,7 @@ def analyze_text(text):
         scam_score += 15
 
         reasons.append(
-            "External links detected in message."
+            "External links detected."
         )
 
         for url in urls:
@@ -261,11 +247,11 @@ def analyze_text(text):
                     scam_score += 20
 
                     reasons.append(
-                        f"Suspicious domain detected: {domain}"
+                        f"Suspicious domain found: {domain}"
                     )
 
     # =====================================================
-    # CAPS DETECTION
+    # UPPERCASE CHECK
     # =====================================================
 
     uppercase_words = re.findall(
@@ -278,11 +264,11 @@ def analyze_text(text):
         scam_score += 10
 
         reasons.append(
-            "Aggressive urgency formatting detected."
+            "Aggressive uppercase formatting."
         )
 
     # =====================================================
-    # URGENCY DETECTION
+    # URGENCY CHECK
     # =====================================================
 
     urgency_words = [
@@ -305,15 +291,14 @@ def analyze_text(text):
         scam_score += 10
 
         reasons.append(
-            "Multiple urgency indicators found."
+            "Urgency indicators detected."
         )
 
     # =====================================================
-    # DATASET MATCHING
+    # DATASET MATCH
     # =====================================================
 
     best_match = None
-
     best_similarity = 0
 
     for entry in KNOWLEDGE_BASE:
@@ -326,12 +311,7 @@ def analyze_text(text):
         if sim > best_similarity:
 
             best_similarity = sim
-
             best_match = entry
-
-    # =====================================================
-    # FINAL DECISION
-    # =====================================================
 
     prediction = "REAL"
 
@@ -340,13 +320,17 @@ def analyze_text(text):
         prediction = best_match["label"]
 
         reasons.append(
-            f"Dataset similarity match found "
-            f"({round(best_similarity * 100)}%)."
+            f"Dataset similarity match: "
+            f"{round(best_similarity * 100)}%"
         )
 
         if prediction == "FAKE":
 
             scam_score += 30
+
+    # =====================================================
+    # FINAL PREDICTION
+    # =====================================================
 
     if scam_score >= 35:
 
@@ -354,37 +338,29 @@ def analyze_text(text):
 
     confidence = min(
         99,
-        max(70, scam_score + 50)
+        max(60, scam_score + 50)
     )
 
     trust = (
+
         "HIGH RISK ❌"
+
         if prediction == "FAKE"
+
         else "SAFE ✅"
+
     )
-
-    if prediction == "REAL" and scam_score < 20:
-
-        reasons.append(
-            "No major scam patterns detected."
-        )
-
-        reasons.append(
-            "Language structure appears normal."
-        )
-
-        reasons.append(
-            "Risk engine classified content as safe."
-        )
 
     if prediction == "FAKE":
 
         reasons.append(
-            "AI threat engine marked content as suspicious."
+            "AI engine classified content as scam/phishing."
         )
 
+    else:
+
         reasons.append(
-            "Behavior pattern matches phishing/scam logic."
+            "No major scam patterns detected."
         )
 
     return {
@@ -395,7 +371,7 @@ def analyze_text(text):
 
         "trust": trust,
 
-        "reason": reasons[:6]
+        "reason": reasons[:5]
 
     }
 
@@ -418,7 +394,7 @@ def chat():
     return render_template("chat.html")
 
 # =========================================================
-# PREDICT ROUTE
+# PREDICT API
 # =========================================================
 
 @app.route("/predict", methods=["POST"])
@@ -426,7 +402,18 @@ def predict():
 
     try:
 
-        data = request.get_json(force=True)
+        data = request.get_json()
+
+        if not data:
+
+            return jsonify({
+
+                "prediction": "ERROR",
+                "confidence": "0%",
+                "trust": "INVALID REQUEST",
+                "reason": ["No JSON received"]
+
+            }), 400
 
         text = data.get("text", "").strip()
 
@@ -435,14 +422,9 @@ def predict():
             return jsonify({
 
                 "prediction": "REAL",
-
                 "confidence": "0%",
-
                 "trust": "LOW",
-
-                "reason": [
-                    "Empty input"
-                ]
+                "reason": ["Empty input"]
 
             })
 
@@ -451,7 +433,6 @@ def predict():
         CHAT_HISTORY.append({
 
             "text": text,
-
             "prediction": result["prediction"]
 
         })
@@ -460,27 +441,19 @@ def predict():
 
     except Exception as e:
 
-        print(
-            "PREDICT ERROR:",
-            str(e)
-        )
+        print("PREDICT ERROR:", str(e))
 
         return jsonify({
 
             "prediction": "ERROR",
-
             "confidence": "0%",
-
-            "trust": "SYSTEM ERROR",
-
-            "reason": [
-                str(e)
-            ]
+            "trust": "SERVER ERROR",
+            "reason": [str(e)]
 
         }), 500
 
 # =========================================================
-# PDF ANALYSIS
+# PDF UPLOAD
 # =========================================================
 
 @app.route("/upload_pdf", methods=["POST"])
@@ -494,7 +467,7 @@ def upload_pdf():
 
             return jsonify({
                 "error": "No file uploaded"
-            })
+            }), 400
 
         reader = PdfReader(file)
 
@@ -522,9 +495,7 @@ def upload_pdf():
 
             "trust": "PDF ERROR",
 
-            "reason": [
-                str(e)
-            ]
+            "reason": [str(e)]
 
         }), 500
 
@@ -551,7 +522,20 @@ def logout():
     return redirect("/")
 
 # =========================================================
-# RUN SERVER
+# HEALTH CHECK
+# =========================================================
+
+@app.route("/health")
+def health():
+
+    return jsonify({
+
+        "status": "running"
+
+    })
+
+# =========================================================
+# RUN APP
 # =========================================================
 
 if __name__ == "__main__":
@@ -569,4 +553,3 @@ if __name__ == "__main__":
         debug=True
 
     )
-
