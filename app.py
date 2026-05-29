@@ -1,215 +1,572 @@
-﻿from flask import Flask, request, jsonify, render_template, session, redirect
-from flask_cors import CORS
+﻿
 import os
+import re
 import pandas as pd
-from PyPDF2 import PdfReader # type: ignore
 
-app = Flask(__name__)
+from flask import (
+    Flask,
+    request,
+    jsonify,
+    render_template,
+    session,
+    redirect
+)
+
+from flask_cors import CORS
+from PyPDF2 import PdfReader
+from difflib import SequenceMatcher
+
+# =========================================================
+# FLASK SETUP
+# =========================================================
+
+app = Flask(
+    __name__,
+    template_folder="templates"
+)
+
 app.secret_key = "veridion_secret_key"
+
 CORS(app)
 
-# ==========================================
-# DATASET INGESTION (data.csv & news.csv)
-# ==========================================
+# =========================================================
+# DATASET FILES
+# =========================================================
+
 DATA_FILE = "data.csv"
 NEWS_FILE = "news.csv"
 
+# =========================================================
+# CLEAN TEXT
+# =========================================================
+
+def clean_text(text):
+
+    text = str(text).lower()
+
+    # Remove URLs
+    text = re.sub(r"http\S+", "", text)
+
+    # Remove special characters
+    text = re.sub(
+        r"[^a-zA-Z0-9\s]",
+        "",
+        text
+    )
+
+    return text.strip()
+
+# =========================================================
+# LOAD KNOWLEDGE BASE
+# =========================================================
+
 def load_knowledge_base():
-    """Loads and compiles data arrays from local CSV configurations safely."""
-    knowledge_records = []
-    
-    # 1. Attempt to parse data.csv
-    if os.path.exists(DATA_FILE):
-        try:
-            df1 = pd.read_csv(DATA_FILE)
-            # Standardize common column headings to lower text frames
-            df1.columns = [c.lower() for c in df1.columns]
-            for _, row in df1.iterrows():
-                # Extract text target columns safely
-                text_content = str(row.get('text', row.get('title', row.get('statement', '')))).strip().lower()
-                # Determine binary or string state targets
-                label_raw = str(row.get('label', row.get('prediction', row.get('status', 'fake')))).strip().upper()
-                
-                label = "FAKE" if any(x in label_raw for x in ["FAKE", "0", "FALSE", "SPAM", "SUSPICIOUS"]) else "REAL"
-                if text_content:
-                    knowledge_records.append({"text": text_content, "label": label})
-        except Exception as e:
-            print(f"Non-fatal error reading {DATA_FILE}: {e}")
 
-    # 2. Attempt to parse news.csv
-    if os.path.exists(NEWS_FILE):
-        try:
-            df2 = pd.read_csv(NEWS_FILE)
-            df2.columns = [c.lower() for c in df2.columns]
-            for _, row in df2.iterrows():
-                text_content = str(row.get('text', row.get('title', row.get('statement', '')))).strip().lower()
-                label_raw = str(row.get('label', row.get('prediction', row.get('status', 'fake')))).strip().upper()
-                
-                label = "FAKE" if any(x in label_raw for x in ["FAKE", "0", "FALSE", "SPAM", "SUSPICIOUS"]) else "REAL"
-                if text_content:
-                    knowledge_records.append({"text": text_content, "label": label})
-        except Exception as e:
-            print(f"Non-fatal error reading {NEWS_FILE}: {e}")
-            
-    return knowledge_records
+    records = []
 
-# Load CSV collections into memory structure once during execution mapping
+    for file in [DATA_FILE, NEWS_FILE]:
+
+        if os.path.exists(file):
+
+            try:
+
+                df = pd.read_csv(file)
+
+                df.columns = [
+                    c.lower()
+                    for c in df.columns
+                ]
+
+                for _, row in df.iterrows():
+
+                    text = str(
+                        row.get("text")
+                        or row.get("title")
+                        or ""
+                    ).strip()
+
+                    label_raw = str(
+                        row.get("label")
+                        or row.get("class")
+                        or "fake"
+                    ).upper()
+
+                    label = (
+                        "FAKE"
+                        if any(
+                            x in label_raw
+                            for x in [
+                                "FAKE",
+                                "FALSE",
+                                "0",
+                                "SPAM"
+                            ]
+                        )
+                        else "REAL"
+                    )
+
+                    cleaned = clean_text(text)
+
+                    if cleaned:
+
+                        records.append({
+                            "text": cleaned,
+                            "label": label
+                        })
+
+            except Exception as e:
+
+                print(
+                    f"Error loading {file}: {e}"
+                )
+
+    print(
+        f"Loaded {len(records)} records into knowledge base."
+    )
+
+    return records
+
+# =========================================================
+# LOAD DATA
+# =========================================================
+
 KNOWLEDGE_BASE = load_knowledge_base()
 
-# ==========================================
-# MEMORY CACHE ARCHIVE
-# ==========================================
 CHAT_HISTORY = []
 
-# ==========================================
-# DESKTOP ROUTINGS
-# ==========================================
+# =========================================================
+# SCAM KEYWORDS
+# =========================================================
+
+SCAM_KEYWORDS = [
+
+    "otp",
+    "bank",
+    "upi",
+    "verify",
+    "click here",
+    "urgent",
+    "lottery",
+    "prize",
+    "winner",
+    "congratulations",
+    "password",
+    "aadhaar",
+    "account blocked",
+    "suspended",
+    "claim now",
+    "limited time",
+    "free money",
+    "bitcoin",
+    "payment failed",
+    "refund",
+    "login immediately",
+    "security alert",
+    "gift card",
+    "wire transfer",
+    "investment guaranteed",
+    "act now",
+    "pay now",
+    "confirm identity",
+    "kyc update",
+    "transaction failed"
+
+]
+
+# =========================================================
+# SUSPICIOUS DOMAINS
+# =========================================================
+
+SUSPICIOUS_DOMAINS = [
+
+    ".xyz",
+    ".top",
+    ".click",
+    ".buzz",
+    ".tk",
+    ".gq"
+
+]
+
+# =========================================================
+# TEXT SIMILARITY
+# =========================================================
+
+def similarity(a, b):
+
+    return SequenceMatcher(
+        None,
+        a,
+        b
+    ).ratio()
+
+# =========================================================
+# MAIN AI ANALYSIS ENGINE
+# =========================================================
+
+def analyze_text(text):
+
+    original_text = text
+
+    text = clean_text(text)
+
+    reasons = []
+
+    scam_score = 0
+
+    # =====================================================
+    # KEYWORD DETECTION
+    # =====================================================
+
+    keyword_hits = []
+
+    for keyword in SCAM_KEYWORDS:
+
+        if keyword in text:
+
+            scam_score += 10
+
+            keyword_hits.append(keyword)
+
+    if keyword_hits:
+
+        reasons.append(
+            f"Suspicious keywords detected: "
+            f"{', '.join(keyword_hits[:6])}"
+        )
+
+    # =====================================================
+    # URL DETECTION
+    # =====================================================
+
+    urls = re.findall(
+        r'(https?://\S+|www\.\S+)',
+        original_text
+    )
+
+    if urls:
+
+        scam_score += 15
+
+        reasons.append(
+            "External links detected in message."
+        )
+
+        for url in urls:
+
+            for domain in SUSPICIOUS_DOMAINS:
+
+                if domain in url:
+
+                    scam_score += 20
+
+                    reasons.append(
+                        f"Suspicious domain detected: {domain}"
+                    )
+
+    # =====================================================
+    # CAPS DETECTION
+    # =====================================================
+
+    uppercase_words = re.findall(
+        r'\b[A-Z]{4,}\b',
+        original_text
+    )
+
+    if len(uppercase_words) >= 2:
+
+        scam_score += 10
+
+        reasons.append(
+            "Aggressive urgency formatting detected."
+        )
+
+    # =====================================================
+    # URGENCY DETECTION
+    # =====================================================
+
+    urgency_words = [
+
+        "urgent",
+        "immediately",
+        "now",
+        "fast",
+        "hurry"
+
+    ]
+
+    urgency_count = sum(
+        word in text
+        for word in urgency_words
+    )
+
+    if urgency_count >= 2:
+
+        scam_score += 10
+
+        reasons.append(
+            "Multiple urgency indicators found."
+        )
+
+    # =====================================================
+    # DATASET MATCHING
+    # =====================================================
+
+    best_match = None
+
+    best_similarity = 0
+
+    for entry in KNOWLEDGE_BASE:
+
+        sim = similarity(
+            text,
+            entry["text"]
+        )
+
+        if sim > best_similarity:
+
+            best_similarity = sim
+
+            best_match = entry
+
+    # =====================================================
+    # FINAL DECISION
+    # =====================================================
+
+    prediction = "REAL"
+
+    if best_match and best_similarity > 0.70:
+
+        prediction = best_match["label"]
+
+        reasons.append(
+            f"Dataset similarity match found "
+            f"({round(best_similarity * 100)}%)."
+        )
+
+        if prediction == "FAKE":
+
+            scam_score += 30
+
+    if scam_score >= 35:
+
+        prediction = "FAKE"
+
+    confidence = min(
+        99,
+        max(70, scam_score + 50)
+    )
+
+    trust = (
+        "HIGH RISK ❌"
+        if prediction == "FAKE"
+        else "SAFE ✅"
+    )
+
+    if prediction == "REAL" and scam_score < 20:
+
+        reasons.append(
+            "No major scam patterns detected."
+        )
+
+        reasons.append(
+            "Language structure appears normal."
+        )
+
+        reasons.append(
+            "Risk engine classified content as safe."
+        )
+
+    if prediction == "FAKE":
+
+        reasons.append(
+            "AI threat engine marked content as suspicious."
+        )
+
+        reasons.append(
+            "Behavior pattern matches phishing/scam logic."
+        )
+
+    return {
+
+        "prediction": prediction,
+
+        "confidence": f"{confidence}%",
+
+        "trust": trust,
+
+        "reason": reasons[:6]
+
+    }
+
+# =========================================================
+# HOME PAGE
+# =========================================================
+
 @app.route("/")
 def home():
+
     return render_template("index.html")
+
+# =========================================================
+# CHAT PAGE
+# =========================================================
 
 @app.route("/chat")
 def chat():
+
     return render_template("chat.html")
 
-# ==========================================
-# PREDICTION ENGINE (DATAFRAME PARSER)
-# ==========================================
+# =========================================================
+# PREDICT ROUTE
+# =========================================================
+
 @app.route("/predict", methods=["POST"])
 def predict():
+
     try:
-        data = request.get_json(silent=True)
-        text = (data.get("text", "") if data else "").strip().lower()
+
+        data = request.get_json(force=True)
+
+        text = data.get("text", "").strip()
 
         if not text:
+
             return jsonify({
+
                 "prediction": "REAL",
+
                 "confidence": "0%",
-                "reason": ["Empty string validation parameters encountered."] * 6,
-                "trust": "LOW"
+
+                "trust": "LOW",
+
+                "reason": [
+                    "Empty input"
+                ]
+
             })
 
-        # Search for keyword alignment overlaps from dataset configurations
-        matched_entry = None
-        highest_overlap = 0
-        
-        # Simple similarity scanner across compiled row data
-        for entry in KNOWLEDGE_BASE:
-            if entry["text"] in text or text in entry["text"]:
-                overlap_score = len(set(text.split()) & set(entry["text"].split()))
-                if overlap_score >= highest_overlap:
-                    highest_overlap = overlap_score
-                    matched_entry = entry
+        result = analyze_text(text)
 
-        # Handle classification results cleanly based on matching records
-        if matched_entry:
-            prediction = matched_entry["label"]
-            # Derive deterministic baseline metrics from matching overlap profiles
-            confidence_val = min(99, 85 + highest_overlap)
-            confidence = f"{confidence_val}%"
-        else:
-            # Fallback evaluation matrix if context text is absent from datasets
-            if any(w in text for w in ["aadhaar", "double", "won", "click", "link", "bank details", "5,00,000", "lakhs"]):
-                prediction = "FAKE"
-                confidence = "97%"
-            else:
-                prediction = "REAL"
-                confidence = "82%"
+        CHAT_HISTORY.append({
 
-        # Structural response packaging mapping 6 explicit criteria elements
-        if prediction == "FAKE":
-            reason = [
-                "Matches verification signature logs flagged inside database records.",
-                "Requests private citizen security credentials via unverified URLs.",
-                "Employs urgent transaction tracking windows or artificial scarcity.",
-                "Monetary generation parameters contradict institutional guidelines.",
-                "Cryptographic signature check fails tracking route profiles.",
-                "Structure anomalies match typical bulk-phishing configurations."
-            ]
-            trust = "HIGH RISK ❌ UNVERIFIED"
-        else:
-            reason = [
-                "Aligns cleanly with credible information records in system memory.",
-                "Maintains a balanced, objective, and informative presentation layout.",
-                "Free from anomalous tracking parameters or routing redirection flags.",
-                "Maintains structured coherence lacking typical social engineering triggers.",
-                "Factual structural pattern profile validated against known records.",
-                "Contextual references pass baseline internal verification metrics."
-            ]
-            trust = "SAFE ✅ VERIFIED"
+            "text": text,
 
-        result = {
-            "prediction": prediction,
-            "confidence": confidence,
-            "reason": reason,
-            "trust": trust
-        }
+            "prediction": result["prediction"]
 
-        # Store calculation history metrics cleanly
-        CHAT_HISTORY.append({"text": text, "prediction": prediction})
+        })
+
         return jsonify(result)
 
     except Exception as e:
-        return jsonify({
-            "prediction": "ERROR",
-            "confidence": "0%",
-            "reason": [f"System evaluation exception caught: {str(e)}"] * 6,
-            "trust": "UNKNOWN"
-        })
 
-# ==========================================
-# FILE INGESTION PARSER
-# ==========================================
+        print(
+            "PREDICT ERROR:",
+            str(e)
+        )
+
+        return jsonify({
+
+            "prediction": "ERROR",
+
+            "confidence": "0%",
+
+            "trust": "SYSTEM ERROR",
+
+            "reason": [
+                str(e)
+            ]
+
+        }), 500
+
+# =========================================================
+# PDF ANALYSIS
+# =========================================================
+
 @app.route("/upload_pdf", methods=["POST"])
 def upload_pdf():
-    try:
-        if "file" not in request.files:
-            return jsonify({"prediction": "NO FILE", "reason": ["No file target found."] * 6})
 
-        file = request.files["file"]
+    try:
+
+        file = request.files.get("file")
+
+        if not file:
+
+            return jsonify({
+                "error": "No file uploaded"
+            })
+
         reader = PdfReader(file)
+
         text = ""
 
         for page in reader.pages:
-            text += page.extract_text() or ""
 
-        text = text.strip().lower()
-        
-        # Cross check extracted text logs directly against current dataset arrays
-        matched = False
-        for entry in KNOWLEDGE_BASE:
-            if entry["text"] in text or text in entry["text"]:
-                if entry["label"] == "FAKE":
-                    matched = True
-                    break
+            extracted = page.extract_text()
 
-        if matched or any(w in text for w in ["aadhaar", "double", "click here", "won"]):
-            return jsonify({
-                "prediction": "FAKE CONTENT DETECTED",
-                "confidence": "96%",
-                "reason": ["File contains text alignments flagged inside storage blocks."] * 6
-            })
-        else:
-            return jsonify({
-                "prediction": "REAL CONTENT VALIDATED",
-                "confidence": "88%",
-                "reason": ["File metrics register no security flags or anomalous entries."] * 6
-            })
+            if extracted:
+
+                text += extracted + " "
+
+        result = analyze_text(text)
+
+        return jsonify(result)
 
     except Exception as e:
-        return jsonify({"prediction": "ERROR", "reason": [str(e)] * 6})
 
-# ==========================================
-# MANAGEMENT ROUTINGS
-# ==========================================
+        return jsonify({
+
+            "prediction": "ERROR",
+
+            "confidence": "0%",
+
+            "trust": "PDF ERROR",
+
+            "reason": [
+                str(e)
+            ]
+
+        }), 500
+
+# =========================================================
+# HISTORY
+# =========================================================
+
 @app.route("/history")
 def history():
-    return jsonify(CHAT_HISTORY[-20:])
+
+    return jsonify(
+        CHAT_HISTORY[-20:]
+    )
+
+# =========================================================
+# LOGOUT
+# =========================================================
 
 @app.route("/logout")
 def logout():
+
     session.clear()
+
     return redirect("/")
 
+# =========================================================
+# RUN SERVER
+# =========================================================
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+
+    port = int(
+        os.environ.get("PORT", 5000)
+    )
+
+    app.run(
+
+        host="0.0.0.0",
+
+        port=port,
+
+        debug=True
+
+    )
+
