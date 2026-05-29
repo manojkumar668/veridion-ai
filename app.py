@@ -128,7 +128,15 @@ def load_knowledge_base():
 # GLOBALS
 # =========================================================
 
-KNOWLEDGE_BASE = load_knowledge_base()
+try:
+
+    KNOWLEDGE_BASE = load_knowledge_base()
+
+except Exception as e:
+
+    print("Knowledge Base Load Error:", e)
+
+    KNOWLEDGE_BASE = []
 
 CHAT_HISTORY = []
 
