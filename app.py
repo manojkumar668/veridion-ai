@@ -545,16 +545,11 @@ def health():
 # =========================================================
 # RUN APP
 # =========================================================
-
-from flask import Flask, jsonify
-
-app = Flask(__name__)
-def home():
-    return "Veridion AI Running Successfully 🚀"
-@app.route("/health")
-def health():
-    return jsonify({
-        "status": "running"
-        })
 if __name__ == "__main__":
-    app.run(debug=True)
+
+    app.run(
+        host="0.0.0.0",
+        port=int(os.environ.get("PORT", 5000)),
+        debug=True
+        
+    )  
